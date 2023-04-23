@@ -6,5 +6,6 @@ RUN apt update \
     && apt upgrade -y \
     && apt install -y git vim
 
-RUN pip install poetry==1.4.2 && poetry config virtualenvs.create false
-
+RUN pip install poetry==1.4.2 \
+    && poetry config virtualenvs.create false \
+    && poetry install

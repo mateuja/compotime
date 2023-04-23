@@ -6,9 +6,13 @@ from scipy import optimize
 from scipy.optimize import Bounds, LinearConstraint
 from scipy import linalg
 
+class Params:
+    def __iter__(self):
+        yield from vars(self).values()
+
 
 @dataclass(frozen=True)
-class LocalLevelParams:
+class LocalLevelParams(Params):
     X_zero: np.ndarray
     alpha: np.ndarray
 
@@ -25,14 +29,14 @@ class LocalLevelParams:
 
 
 @dataclass(frozen=True)
-class LocalTrendParams:
+class LocalTrendParams(Params):
     X_zero: np.ndarray
     g: np.ndarray
 
     @classmethod
     def init(cls, num_series: int) -> Self:
-        X_zero = np.random.uniform(-4, 1, num_series * 2)[:, None]
-        g = np.random.uniform(0, 1, 1 * 2)[:, None]
+        X_zero = np.random.uniform(-4, 1, (2, num_series))
+        g = np.random.uniform(0, 1, (2, 1))
         return cls(X_zero, g)
 
     @property
@@ -46,36 +50,85 @@ class LocalTrendParams:
         ub = np.array([np.inf] * self.X_zero.size + [4.0] + [np.inf])
         return [LinearConstraint(constraint_matrix, ub=ub)]
 
-
-class LocalTrendForecaster:
-    optim_params_: LocalTrendParams
-    X_: np.ndarray
-    errors_: np.ndarray
+class LocalLevelForecaster:
+    optim_params_: LocalLevelParams
+    X_: list[np.ndarray]
+    fitted_curve_: pd.DataFrame
     colnames_: pd.Index
     time_idx_: pd.Index
 
     def fit(self, y: pd.DataFrame) -> Self:
         self.colnames_ = y.columns
         self.time_idx_ = y.index
-
-        self.optim_params_ = _fit_local_level(_log_ratio(y.values))
-        self.X_, self.errors_ = _forward(
-            self.optim_params_.X_zero, self.optim_params_.alpha, y.values
+        
+        log_y = _log_ratio(y.values)
+        
+        self.optim_params_ = _fit_local_level(log_y)
+        self.X_, fitted_curve, _ = _forward(
+            self.optim_params_.X_zero, self.optim_params_.alpha, log_y
         )
+
+        self.fitted_curve_ = pd.DataFrame(_inv_log_ratio(fitted_curve), y.index, y.columns)
+
+        return self
+
+    
+    def predict(self, horizon: int) -> pd.DataFrame:
+        if isinstance(self.time_idx_, pd.PeriodIndex):
+            date_range = pd.period_range
+        else:
+            date_range = pd.date_range
+
+        freq = self.time_idx_.inferred_freq
+        preds_idx = date_range(
+            self.time_idx_.max() + pd.tseries.frequencies.to_offset(freq), periods=horizon, freq=freq
+        )
+        preds = pd.DataFrame(
+            _inv_log_ratio(np.tile(self.X_[-1], (horizon, 1))), preds_idx, self.colnames_
+        )
+        return preds
+
+class LocalTrendForecaster:
+    optim_params_: LocalTrendParams
+    X_: list[np.ndarray]
+    fitted_curve_: pd.DataFrame
+    colnames_: pd.Index
+    time_idx_: pd.Index
+
+    def fit(self, y: pd.DataFrame) -> Self:
+        self.colnames_ = y.columns
+        self.time_idx_ = y.index
+        
+        log_y = _log_ratio(y.values)
+        
+        self.optim_params_ = _fit_local_trend(log_y)
+
+        self.X_, fitted_curve, _ = _forward(
+            self.optim_params_.X_zero, self.optim_params_.g, log_y
+        )
+
+        self.fitted_curve_ = pd.DataFrame(_inv_log_ratio(fitted_curve), y.index, y.columns)
+
         return self
 
     def predict(self, horizon: int) -> pd.DataFrame:
-        preds_idx = pd.date_range(
-            self.time_idx_.max() + 1, periods=horizon, freq=self.time_idx_.freq
+        if isinstance(self.time_idx_, pd.PeriodIndex):
+            date_range = pd.period_range
+        else:
+            date_range = pd.date_range
+
+        freq = self.time_idx_.inferred_freq
+        preds_idx = date_range(
+            self.time_idx_.max() + pd.tseries.frequencies.to_offset(freq), periods=horizon, freq=freq
         )
         preds = pd.DataFrame(
-            _inv_log_ratio(_predict_local_trend(horizon, self.X_[-1, :])), preds_idx, self.colnames_
+            _inv_log_ratio(_predict_local_trend(horizon, self.X_[-1])), preds_idx, self.colnames_
         )
         return preds
 
 
 def _predict_local_trend(horizon: int, X_last: np.ndarray):
-    F = np.tri(2)
+    F = np.tri(2).T
     w = np.ones(2)
 
     preds = []
@@ -84,34 +137,9 @@ def _predict_local_trend(horizon: int, X_last: np.ndarray):
         X_last = F @ X_last
         preds.append(y_hat)
 
-    return preds
+    return np.vstack(preds)
 
 
-class LocalLevelForecaster:
-    optim_params_: LocalLevelParams
-    X_: np.ndarray
-    errors_: np.ndarray
-    colnames_: pd.Index
-    time_idx_: pd.Index
-
-    def fit(self, y: pd.DataFrame) -> Self:
-        self.colnames_ = y.columns
-        self.time_idx_ = y.index
-
-        self.optim_params_ = _fit_local_level(_log_ratio(y.values))
-        self.X_, self.errors_ = _forward(
-            self.optim_params_.X_zero, self.optim_params_.alpha, y.values
-        )
-        return self
-
-    def predict(self, horizon: int) -> pd.DataFrame:
-        preds_idx = pd.date_range(
-            self.time_idx_.max() + 1, periods=horizon, freq=self.time_idx_.freq
-        )
-        preds = pd.DataFrame(
-            _inv_log_ratio(np.tile(self.X_[-1, :], (horizon, 1))), preds_idx, self.colnames_
-        )
-        return preds
 
 
 def _log_ratio(array: np.ndarray) -> np.ndarray:
@@ -124,7 +152,7 @@ def _inv_log_ratio(array: np.ndarray) -> np.ndarray:
     return np.insert(array, 0, 1 - array.sum(axis=1), axis=1)
 
 
-def _flatten_params(*params) -> tuple[np.ndarray, tuple[int]]:
+def _flatten_params(params) -> tuple[np.ndarray, tuple[int]]:
     params, shapes = tuple(zip(*((np.ravel(x), x.shape) for x in params)))
     return np.concatenate(params), shapes
 
@@ -153,10 +181,12 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
         _objective,
         flat_params,
         (shapes, y),
-        method="turst-constr",
+        method="trust-constr",
         bounds=params.bounds,
         constraints=params.constraints,
     ).x
+
+    opt_params = _unflatten_params(opt_params, shapes)  
 
     return LocalTrendParams(*opt_params)
 
@@ -170,6 +200,8 @@ def _fit_local_level(y: np.ndarray) -> LocalLevelParams:
     opt_params = optimize.minimize(
         _objective, flat_params, (shapes, y), method="trust-constr", bounds=params.bounds
     ).x
+
+    opt_params = _unflatten_params(opt_params, shapes)  
 
     return LocalLevelParams(*opt_params)
 
@@ -186,27 +218,31 @@ def _neg_log_likelihood(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> flo
 
 def _mle_V(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
     n = len(y)
-    _, errors = _forward(X_zero, g, y)
+    _, _, errors = _forward(X_zero, g, y)
     return sum(error @ error for error in errors) / n
 
 
-def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> np.ndarray:
+def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
     if X_zero.ndim == 1:
         n_rows = 1
     else:
         n_rows = len(X_zero)
 
     w = np.ones(n_rows)
-    F = np.tri(n_rows)
+    F = np.tri(n_rows).T
 
+    X_vals = []
+    fitted_curve = []
     errors = []
-    X_vals = [X_zero]
     X_prev = X_zero
+    X_vals.append(X_zero)
     for y_t in y:
-        error = y_t - w @ X_prev
+        fitted = w @ X_prev
+        error = y_t - fitted
         X_prev = F @ X_prev + g @ error.reshape(1, -1)
 
         errors.append(error)
         X_vals.append(X_prev)
+        fitted_curve.append(fitted)
 
-    return np.vstack(X_vals), np.vstack(errors)
+    return X_vals, np.vstack(fitted_curve), np.vstack(errors)
