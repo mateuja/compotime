@@ -9,7 +9,7 @@ from compotime import _models as models
 
 @given(st.lists(hnp.from_dtype(np.dtype(float)), min_size=1))
 def test_unflatten_is_inverse_of_flatten(params):
-    flat_params, shapes = models._flatten_params(*params)
+    flat_params, shapes = models._flatten_params(params)
     unflattened_params = models._unflatten_params(flat_params, shapes)
 
     for original, unflattened in zip(params, unflattened_params):
