@@ -4,7 +4,7 @@ TEST_DIR=tests
 .PHONY: tests lint format
 
 tests:
-	pytest tests
+	pytest $(TEST_DIR)
 
 lint:
 	ruff --fix compotime tests
