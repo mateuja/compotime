@@ -4,7 +4,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 from hypothesis.extra import numpy as hnp
 
-from compotime import _models as models
+from compotime import models
 
 
 @given(st.lists(hnp.from_dtype(np.dtype(float)), min_size=1))

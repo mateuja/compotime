@@ -38,6 +38,9 @@ target-version = "py39"
 
 [tool.ruff.pylint]
 
+[tool.ruff.pydocstyle]
+convention = "numpy"
+
 [tool.ruff.pep8-naming]
 ignore-names = ["F", "X_last", "X_prev", "X_zero"]
 
