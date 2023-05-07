@@ -1,7 +1,7 @@
 # Compositional Time Series
-Some dirty experiments with compositional time series models.
+Some experiments with compositional time series models.
 
-I used daily viewership data in Spain during 2022 (available at [Wikipedia](https://es.wikipedia.org/wiki/Anexo:Audiencias_y_consumo_de_televisi%C3%B3n_en_Espa%C3%B1a_en_2022)).
+In the [example](https://github.com/mateuja/compositional_ts/blob/main/examples/Compositional%20time%20series.ipynb) I used daily viewership data in Spain during 2022 (available at [Wikipedia](https://es.wikipedia.org/wiki/Anexo:Audiencias_y_consumo_de_televisi%C3%B3n_en_Espa%C3%B1a_en_2022)).
 
 ## References:
 - Hyndman, R. J., Koehler, A. B., Ord, J. K., & Snyder, R. D. (2008). Forecasting with exponential smoothing. Berlin: Springer.
