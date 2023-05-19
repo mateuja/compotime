@@ -564,31 +564,14 @@ def _objective(flat_params: np.ndarray, shapes: tuple[int], y: np.ndarray) -> fl
 
     Returns
     -------
-        Negative log-likelihood corresponding to the given parameters and observed time series.
+        Objective function to minimize the negative loglikelihood of the given parameters.
     """
     X_zero, g = _unflatten_params(flat_params, shapes)
-    return _neg_log_likelihood(X_zero, g, y)
+    return _log_mle_gen_var(X_zero, g, y)
 
 
-def _neg_log_likelihood(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
-    """Compute the negative log likelihood of the parameters given the observed time series.
-
-    Parameters
-    ----------
-        X_zero: Seed state matrix.
-        g: Persistence vector.
-        y: Observed time series.
-
-    Returns
-    -------
-        Negative log likelihood.
-    """
-    n, r = y.shape
-    return n * r / 2 * np.log(2 * np.pi) + n / 2 * np.log(_mle_var(X_zero, g, y)) + n * r / 2
-
-
-def _mle_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
-    """Compute the maximum likelihood estimator for the variance of the errors.
+def _log_mle_gen_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
+    """Compute the logarithm of the maximum likelihood estimator for the generalized variance.
 
     Parameters
     ----------
@@ -598,11 +581,14 @@ def _mle_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
 
     Returns
     -------
-        Value of the maximum likelihood estimator for the variance of the errors.
+        Logarithm of the maximum likelihood estimator for the generalized variance.
     """
     n = len(y)
     _, _, errors = _forward(X_zero, g, y)
-    return sum(error @ error for error in errors) / n
+    _, gen_var_log = np.linalg.slogdet(
+        sum(error.reshape(-1, 1) @ error.reshape(1, -1) for error in errors) / n,
+    )
+    return gen_var_log
 
 
 def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
