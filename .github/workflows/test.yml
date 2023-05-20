@@ -1,0 +1,38 @@
+name: Build and test
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip 
+          pip install poetry
+          if [ -f pyproject.toml ]; then poetry install --all-extras; fi
+
+      - name: Lint with ruff
+        run: |
+          poetry run ruff compotime tests
+
+      - name: Test with pytest
+        run: |
+          poetry run make tests
+  
