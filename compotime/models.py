@@ -239,7 +239,7 @@ class LocalLevelForecaster:
     colnames_: pd.Index
     time_idx_: pd.Index
 
-    def fit(self, y: pd.DataFrame, random_state: int = 0) -> Self:
+    def fit(self, y: pd.DataFrame, random_state: int = 0, threshold: float = 1e-6) -> Self:
         """Fit the model.
 
         Parameters
@@ -247,6 +247,7 @@ class LocalLevelForecaster:
             y: Time series dataframe, where rows represent the timestamps and columns the
                 different shares series.
             random_state: Random state to initialize the random generator.
+            threshold: Minimum value that all time series values must have; set to `threshold`, otherwise.
 
         Returns
         -------
@@ -255,6 +256,8 @@ class LocalLevelForecaster:
         rng = np.random.default_rng(random_state)
         self.colnames_ = y.columns
         self.time_idx_ = y.index
+
+        y = _treat_zeros(y, threshold)
 
         log_y = _log_ratio(y.values)
 
@@ -333,7 +336,7 @@ class LocalTrendForecaster:
     colnames_: pd.Index
     time_idx_: pd.Index
 
-    def fit(self, y: pd.DataFrame, random_state: int = 0) -> Self:
+    def fit(self, y: pd.DataFrame, random_state: int = 0, threshold: float = 0.001) -> Self:
         """Fit the model.
 
         Parameters
@@ -341,6 +344,7 @@ class LocalTrendForecaster:
             y: Time series dataframe, where rows represent the timestamps and columns the
                 different shares series.
             random_state: Random state to initialize the random generator.
+            threshold: Minimum value that all time series values must have; set to `threshold`, otherwise.
 
         Returns
         -------
@@ -349,6 +353,8 @@ class LocalTrendForecaster:
         rng = np.random.default_rng(random_state)
         self.colnames_ = y.columns
         self.time_idx_ = y.index
+
+        y = _treat_zeros(y, threshold)
 
         log_y = _log_ratio(y.values)
 
@@ -388,6 +394,21 @@ class LocalTrendForecaster:
             preds_idx,
             self.colnames_,
         )
+    
+
+def _treat_zeros(df: pd.DataFrame, thresh: float) -> pd.DataFrame:
+    df = df.copy()
+    m = (df < thresh).sum(axis=1)
+    for idx, row in df.iterrows():
+        mask = (row < thresh)
+        m = mask.sum()
+        S = row[~mask].sum()
+        if not m:
+            continue
+        
+        df.loc[idx] = row.mask(mask, thresh).where(mask, lambda x: (1 - thresh * m) * x / S)
+  
+    return df
 
 
 def _log_ratio(array: np.ndarray) -> np.ndarray:
@@ -585,10 +606,68 @@ def _log_mle_gen_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
     """
     n = len(y)
     _, _, errors = _forward(X_zero, g, y)
-    _, gen_var_log = np.linalg.slogdet(
-        sum(error.reshape(-1, 1) @ error.reshape(1, -1) for error in errors) / n,
-    )
+
+    if np.isnan(y).any():
+        gen_var_log = _adj_log_mle_gen_var(y, errors)
+    else:
+        _, gen_var_log = np.linalg.slogdet(
+            sum(error.reshape(-1, 1) @ error.reshape(1, -1) for error in errors) / n,
+        )
     return gen_var_log
+
+
+def _adj_log_mle_gen_var(y: np.ndarray, errors: np.ndarray) -> float:
+    """Compute the logarithm of the adjusted maximum likelihood estimator for the generalized
+    variance for cases with time series of different lenghts (i.e. containing NaN values).
+
+    Parameters
+    ----------
+        y: Observed time series.
+        errors: Array of errors per timestamp.
+
+    Returns
+    -------
+        Logarithm of the adjusted maximum likelihood estimator for the generalized variance 
+        for TS with NaN values.
+    """
+    num_nan = (~np.isnan(y)).sum(axis=0)
+    V = np.zeros((y.shape[1], y.shape[1]))
+    for i in range(y.shape[1]):
+        for j in range(i, y.shape[1]):
+            V[i, j] = (errors[:, i] * errors[:, j]).sum() / min(num_nan[i], num_nan[j])
+            if i != j:
+                V[j, i] = V[i, j]
+    
+    adj_gen_var = 0
+    for y_t in y:
+        D = _select_matrix(y_t)
+        V_tilde = D @ V @ D.T
+        _, gen_var_log_t = np.linalg.slogdet(V_tilde)
+        adj_gen_var += gen_var_log_t
+    
+    return adj_gen_var
+
+
+def _select_matrix(y_t: np.ndarray) -> np.ndarray:
+    """Compute matrix that selects the series that are observed (different than 0) at time t.
+
+    Parameters
+    ----------
+        y_t: Values of each time series at time t.
+
+    Returns
+    -------
+        Selection matrix.
+    """
+    D = np.zeros((np.count_nonzero(~np.isnan(y_t)), len(y_t)))
+
+    i = 0
+    for j in range(len(y_t)):
+        if not np.isnan(y_t[j]):
+            D[i, j] = 1
+            i += 1
+
+    return D
 
 
 def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
@@ -618,7 +697,8 @@ def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
     latent_states.append(X_zero)
     for y_t in y:
         fitted = w @ X_prev
-        error = y_t - fitted
+        error = (y_t - fitted)
+        error[np.isnan(error)] = 0.
         X_prev = F @ X_prev + g @ error.reshape(1, -1)
 
         errors.append(error)
