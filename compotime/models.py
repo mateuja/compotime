@@ -646,13 +646,13 @@ def _adj_log_mle_gen_var(y: np.ndarray, errors: np.ndarray) -> float:
         Logarithm of the adjusted maximum likelihood estimator for the generalized variance
         for TS with NaN values.
     """
-    num_nan = (~np.isnan(y)).sum(axis=0)
+    num_not_nan = (~np.isnan(y)).sum(axis=0)
     V = np.zeros((y.shape[1], y.shape[1]))
     for i in range(y.shape[1]):
         for j in range(i, y.shape[1]):
-            V[i, j] = (errors[:, i] * errors[:, j]).sum() / min(num_nan[i], num_nan[j])
-            if i != j:
-                V[j, i] = V[i, j]
+            V[i, j] = (errors[:, i] * errors[:, j]).sum() / min(num_not_nan[i], num_not_nan[j])
+
+    V = V + V.T - np.diag(np.diagonal(V))
 
     adj_gen_var = 0
     for y_t in y:
