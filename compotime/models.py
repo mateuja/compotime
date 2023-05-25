@@ -535,7 +535,6 @@ def _predict_local_trend(horizon: int, X_last: np.ndarray) -> np.ndarray:
         X_last: Value of the lattent state corresponding to the last observed
             observation in the time series.
 
-
     Returns
     -------
         Future values for the time series.
@@ -612,24 +611,24 @@ def _adj_log_mle_gen_var(y: np.ndarray, errors: np.ndarray) -> float:
         for TS with NaN values.
     """
     num_not_nan = (~np.isnan(y)).sum(axis=0)
-    V = np.zeros((y.shape[1], y.shape[1]))
+    covar = np.zeros((y.shape[1], y.shape[1]))
     for i in range(y.shape[1]):
         for j in range(i, y.shape[1]):
-            V[i, j] = (errors[:, i] * errors[:, j]).sum() / min(num_not_nan[i], num_not_nan[j])
+            covar[i, j] = (errors[:, i] * errors[:, j]).sum() / min(num_not_nan[i], num_not_nan[j])
 
-    V = V + V.T - np.diag(np.diagonal(V))
+    covar = covar + covar.T - np.diag(np.diagonal(covar))
 
     adj_gen_var = 0
     for y_t in y:
-        D = _select_matrix(y_t)
-        V_tilde = D @ V @ D.T
-        _, gen_var_log_t = np.linalg.slogdet(V_tilde)
+        selection = _compute_selection_matrix(y_t)
+        adjusted_covar = selection @ covar @ selection.T
+        _, gen_var_log_t = np.linalg.slogdet(adjusted_covar)
         adj_gen_var += gen_var_log_t
 
     return adj_gen_var
 
 
-def _select_matrix(y_t: np.ndarray) -> np.ndarray:
+def _compute_selection_matrix(y_t: np.ndarray) -> np.ndarray:
     """Compute matrix that selects the series that are observed (different than 0) at time t.
 
     Parameters
@@ -640,15 +639,15 @@ def _select_matrix(y_t: np.ndarray) -> np.ndarray:
     -------
         Selection matrix.
     """
-    D = np.zeros((np.count_nonzero(~np.isnan(y_t)), len(y_t)))
+    selection = np.zeros((np.count_nonzero(~np.isnan(y_t)), len(y_t)))
 
     i = 0
     for j in range(len(y_t)):
         if not np.isnan(y_t[j]):
-            D[i, j] = 1
+            selection[i, j] = 1
             i += 1
 
-    return D
+    return selection
 
 
 def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
@@ -678,8 +677,8 @@ def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
     latent_states.append(X_zero)
     for y_t in y:
         fitted = w @ X_prev
-        error = (y_t - fitted)
-        error[np.isnan(error)] = 0.
+        error = y_t - fitted
+        error[np.isnan(error)] = 0.0
         X_prev = F @ X_prev + g @ error.reshape(1, -1)
 
         errors.append(error)

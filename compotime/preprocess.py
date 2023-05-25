@@ -1,33 +1,30 @@
-"""Preprocess funcions for TS."""
+"""Preprocess funcions for compositional time series."""
+import numpy as np
 import pandas as pd
 
 
-def treat_zeros(table: pd.DataFrame, threshold: float) -> pd.DataFrame:
-    """Replace zeros by `thresh` and adjust series to add up to 1.
+def treat_small(y: pd.DataFrame, minimum: float) -> pd.DataFrame:
+    """Adjust the compositional time series so that no value is smaller than ``minimum`.
 
     Parameters
     ----------
-        table: Table contianing the time series data.
-        threshold: Value to convert zeros to.
+        y: Time series data, where each column represents a particular time series.
+        minimum: Minimum value to appear in the time series.
 
     Returns
     -------
-        Table with corrected time series.
+       Adjusted compositional time series.
     """
-    # ruff: noqa: B023
-    table = table.copy()
-    m = (table < threshold).sum(axis=1)
-    for idx, row in table.iterrows():
-        mask = (row < threshold)
-        m = mask.sum()
-        S = row[~mask].sum()
-        if not m:
+    y = y.copy()
+    for idx, y_t in y.iterrows():
+        is_below_min = y_t < minimum
+        n_below_min = is_below_min.sum()
+        if n_below_min == 0:
             continue
 
-        table.loc[idx] = (
-            row
-            .mask(mask, threshold)
-            .where(mask, lambda x: (1 - threshold * m) * x / S)
+        y.loc[idx] = np.where(
+            is_below_min,
+            minimum,
+            (1 - minimum * n_below_min) * y_t / y_t[~is_below_min].sum(),
         )
-
-    return table
+    return y
