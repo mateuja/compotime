@@ -585,10 +585,70 @@ def _log_mle_gen_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
     """
     n = len(y)
     _, _, errors = _forward(X_zero, g, y)
-    _, gen_var_log = np.linalg.slogdet(
-        sum(error.reshape(-1, 1) @ error.reshape(1, -1) for error in errors) / n,
-    )
+
+    if np.isnan(y).any():
+        gen_var_log = _adj_log_mle_gen_var(y, errors)
+    else:
+        _, gen_var_log = np.linalg.slogdet(
+            sum(error.reshape(-1, 1) @ error.reshape(1, -1) for error in errors) / n,
+        )
     return gen_var_log
+
+
+def _adj_log_mle_gen_var(y: np.ndarray, errors: np.ndarray) -> float:
+    """Compute the logarithm of the adjusted MLE for the generalized variance.
+
+    Compute the logarithm of the adjusted maximum likelihood estimator for the generalized
+    variance for cases with time series of different lenghts (i.e. containing NaN values).
+
+    Parameters
+    ----------
+        y: Observed time series.
+        errors: Array of errors per timestamp.
+
+    Returns
+    -------
+        Logarithm of the adjusted maximum likelihood estimator for the generalized variance
+        for TS with NaN values.
+    """
+    num_not_nan = (~np.isnan(y)).sum(axis=0)
+    V = np.zeros((y.shape[1], y.shape[1]))
+    for i in range(y.shape[1]):
+        for j in range(i, y.shape[1]):
+            V[i, j] = (errors[:, i] * errors[:, j]).sum() / min(num_not_nan[i], num_not_nan[j])
+
+    V = V + V.T - np.diag(np.diagonal(V))
+
+    adj_gen_var = 0
+    for y_t in y:
+        D = _select_matrix(y_t)
+        V_tilde = D @ V @ D.T
+        _, gen_var_log_t = np.linalg.slogdet(V_tilde)
+        adj_gen_var += gen_var_log_t
+
+    return adj_gen_var
+
+
+def _select_matrix(y_t: np.ndarray) -> np.ndarray:
+    """Compute matrix that selects the series that are observed (different than 0) at time t.
+
+    Parameters
+    ----------
+        y_t: Values of each time series at time t.
+
+    Returns
+    -------
+        Selection matrix.
+    """
+    D = np.zeros((np.count_nonzero(~np.isnan(y_t)), len(y_t)))
+
+    i = 0
+    for j in range(len(y_t)):
+        if not np.isnan(y_t[j]):
+            D[i, j] = 1
+            i += 1
+
+    return D
 
 
 def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
@@ -618,7 +678,8 @@ def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
     latent_states.append(X_zero)
     for y_t in y:
         fitted = w @ X_prev
-        error = y_t - fitted
+        error = (y_t - fitted)
+        error[np.isnan(error)] = 0.
         X_prev = F @ X_prev + g @ error.reshape(1, -1)
 
         errors.append(error)
