@@ -239,7 +239,7 @@ class LocalLevelForecaster:
     colnames_: pd.Index
     time_idx_: pd.Index
 
-    def fit(self, y: pd.DataFrame, random_state: int = 0, threshold: float = 1e-6) -> Self:
+    def fit(self, y: pd.DataFrame, random_state: int = 0) -> Self:
         """Fit the model.
 
         Parameters
@@ -247,8 +247,6 @@ class LocalLevelForecaster:
             y: Time series dataframe, where rows represent the timestamps and columns the
                 different shares series.
             random_state: Random state to initialize the random generator.
-            threshold: Minimum value that all time series values must have; set to
-            `threshold`, otherwise.
 
         Returns
         -------
@@ -257,8 +255,6 @@ class LocalLevelForecaster:
         rng = np.random.default_rng(random_state)
         self.colnames_ = y.columns
         self.time_idx_ = y.index
-
-        y = _treat_zeros(y, threshold)
 
         log_y = _log_ratio(y.values)
 
@@ -337,7 +333,7 @@ class LocalTrendForecaster:
     colnames_: pd.Index
     time_idx_: pd.Index
 
-    def fit(self, y: pd.DataFrame, random_state: int = 0, threshold: float = 0.001) -> Self:
+    def fit(self, y: pd.DataFrame, random_state: int = 0) -> Self:
         """Fit the model.
 
         Parameters
@@ -345,8 +341,6 @@ class LocalTrendForecaster:
             y: Time series dataframe, where rows represent the timestamps and columns the
                 different shares series.
             random_state: Random state to initialize the random generator.
-            threshold: Minimum value that all time series values must have; set to
-            `threshold`, otherwise.
 
         Returns
         -------
@@ -355,8 +349,6 @@ class LocalTrendForecaster:
         rng = np.random.default_rng(random_state)
         self.colnames_ = y.columns
         self.time_idx_ = y.index
-
-        y = _treat_zeros(y, threshold)
 
         log_y = _log_ratio(y.values)
 
@@ -396,33 +388,6 @@ class LocalTrendForecaster:
             preds_idx,
             self.colnames_,
         )
-
-
-def _treat_zeros(table: pd.DataFrame, thresh: float) -> pd.DataFrame:
-    """Replace zeros by `thresh` and adjust series to add up to 1.
-
-    Parameters
-    ----------
-        table: Table contianing the time series data.
-        thresh: Value to convert zeros to.
-
-    Returns
-    -------
-        Table with corrected time series.
-    """
-    # ruff: noqa: B023
-    table = table.copy()
-    m = (table < thresh).sum(axis=1)
-    for idx, row in table.iterrows():
-        mask = (row < thresh)
-        m = mask.sum()
-        S = row[~mask].sum()
-        if not m:
-            continue
-
-        table.loc[idx] = row.mask(mask, thresh).where(mask, lambda x: (1 - thresh * m) * x / S)
-
-    return table
 
 
 def _log_ratio(array: np.ndarray) -> np.ndarray:
