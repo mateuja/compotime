@@ -24,6 +24,10 @@ def treat_zeros(table: pd.DataFrame, threshold: float) -> pd.DataFrame:
         if not m:
             continue
 
-        table.loc[idx] = row.mask(mask, threshold).where(mask, lambda x: (1 - threshold * m) * x / S)
+        table.loc[idx] = (
+            row
+            .mask(mask, threshold)
+            .where(mask, lambda x: (1 - threshold * m) * x / S)
+        )
 
     return table
