@@ -42,7 +42,7 @@ target-version = "py39"
 convention = "numpy"
 
 [tool.ruff.pep8-naming]
-ignore-names = ["F", "X_last", "X_prev", "X_zero", "S", "V", "D", "V_tilde"]
+ignore-names = ["F", "X_last", "X_prev", "X_zero"]
 
 [tool.ruff.flake8-quotes]
 docstring-quotes = "double"
