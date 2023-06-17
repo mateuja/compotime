@@ -22,9 +22,12 @@
 
           poetryEnv = pkgs.poetry2nix.mkPoetryEnv {
             projectDir = ./.;
+            editablePackageSources = {
+              compotime = ./compotime;
+            };
             python = pkgs.python311;
             preferWheels = true;
-            groups = [ "dev" ];
+            groups = [ "dev" "docs" ];
           };
         in
         {
