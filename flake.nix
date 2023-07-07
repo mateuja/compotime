@@ -31,7 +31,7 @@
           };
         in
         {
-          default = pkgs.mkShell { packages = [ poetryEnv pkgs.poetry ]; };
+          default = pkgs.mkShell { packages = [ poetryEnv pkgs.poetry pkgs.pandoc ]; };
         });
     };
 }

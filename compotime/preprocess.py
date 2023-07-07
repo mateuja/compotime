@@ -13,16 +13,16 @@ def treat_small(y: pd.DataFrame, minimum: float) -> pd.DataFrame:
 
     Returns
     -------
-       Adjusted compositional time series.
+        Adjusted compositional time series.
 
     Notes
     -----
-    TODO!
-    
+        This adjustment ensures that, at each timestamp :math:`t`, the values of the time
+        series still sum to one (see [1]_).
+
     References
     ----------
-
-    .. [*] Snyder, R.D. et al. 2017
+    .. [1] Snyder, R.D. et al. 2017
        Forecasting compositional time series: A state space approach
        International Journal of Forecasting.
     """
@@ -39,4 +39,3 @@ def treat_small(y: pd.DataFrame, minimum: float) -> pd.DataFrame:
             (1 - minimum * n_below_min) * y_t / y_t[~is_below_min].sum(),
         )
     return y
-
