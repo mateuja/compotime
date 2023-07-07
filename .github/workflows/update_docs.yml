@@ -41,7 +41,7 @@ jobs:
           if [ -f pyproject.toml ]; then poetry install --with docs; fi
       - name: Generate docs
         run: |
-          make docs
+          poetry run make docs
       - name: Setup Pages
         uses: actions/configure-pages@v3
       - name: Upload artifact
