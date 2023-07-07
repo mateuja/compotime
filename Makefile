@@ -2,7 +2,7 @@ PACKAGE=compotime
 TEST_DIR=./tests
 DOCS_DIR=./docs
 
-.PHONY: tests lint format docs
+.PHONY: tests cov lint format docs
 
 tests:
 	pytest $(TEST_DIR)
