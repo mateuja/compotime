@@ -1,4 +1,15 @@
-"""Compositional time series state-space models."""
+"""Compositional time series state-space models.
+
+    References
+    ----------
+    .. [*] Hyndman, R.J., Koehler, A.B., Ord, J.K. & Snyder, R.D. 2008.
+       Forecasting with exponential smoothing.
+       Berlin: Springer.
+
+    .. [*] Snyder, R.D. et al. 2017
+       Forecasting compositional time series: A state space approach
+       International Journal of Forecasting.
+"""
 import abc
 from abc import ABC
 from collections.abc import Iterator, Sequence
@@ -54,18 +65,8 @@ class LocalLevelParams(Params):
     -----
     The seed state matrix (`X_zero`) repesents the value for the transition equation that describes
     how the state vectors evolve over time. The persistence vector (`g`) determines the extend of
-    the innovation on the state [1]_. As shown in [2]_, these are the only parameters that need to
+    the innovation on the state. These are the only parameters that need to
     estimated.
-
-    References
-    ----------
-    .. [1] Hyndman, R.J., Koehler, A.B., Ord, J.K. & Snyder, R.D. 2008.
-       Forecasting with exponential smoothing.
-       Berlin: Springer.
-
-    .. [2] Snyder, R.D. et al. 2017
-       Forecasting compositional time series: A state space approach
-       International Journal of Forecasting.
     """
 
     X_zero: np.ndarray
@@ -99,13 +100,7 @@ class LocalLevelParams(Params):
         Notes
         -----
         In the local level model, `g` values must be within the range between 0 and 2, both
-        included [1]_.
-
-        References
-        ----------
-        .. [1] Snyder, R.D. et al. 2017.
-           Forecasting compositional time series: A state space approach
-           International Journal of Forecasting.
+        included.
         """
         lower, upper = zip(*([(-np.inf, np.inf)] * self.X_zero.size + [(0.0, 2.0)]))
         return Bounds(lower, upper)
@@ -120,23 +115,11 @@ class LocalTrendParams(Params):
         X_zero: Seed state matrix.
         g: Persistence vector.
 
-
     Notes
     -----
     The seed state matrix (`X_zero`) repesents the value for the transition equation that describes
     how the state vectors evolve over time. The persistence vector (`g`) determines the extend of
-    the innovation on the state [1]_. As shown in [2]_, these are the only parameters that need to
-    estimated.
-
-    References
-    ----------
-    .. [1] Hyndman, R.J., Koehler, A.B., Ord, J.K. & Snyder, R.D. 2008.
-       Forecasting with exponential smoothing.
-       Berlin: Springer.
-
-    .. [2] Snyder, R.D. et al. 2017.
-       Forecasting compositional time series: A state space approach
-       International Journal of Forecasting.
+    the innovation on the state. These are the only parameters that need to be estimated.
     """
 
     X_zero: np.ndarray
@@ -171,13 +154,7 @@ class LocalTrendParams(Params):
         Notes
         -----
         In the local trend model, `g` can be decomposed into :math:`alpha` and :math:`beta`
-        parameters, which must be greater than or equal to zero (see [1]_).
-
-        References
-        ----------
-        .. [1] Snyder, R.D. et al. 2017.
-           Forecasting compositional time series: A state space approach
-           International Journal of Forecasting.
+        parameters, which must be greater than or equal to zero.
         """
         lower, upper = zip(*([(-np.inf, np.inf)] * self.X_zero.size + [(0.0, np.inf)] * 2))
         return Bounds(lower, upper)
@@ -190,7 +167,6 @@ class LocalTrendParams(Params):
         -------
             Linear constraints for the parameters of the local trend model.
 
-
         Notes
         -----
         In the local trend model, `g` can be decomposed into :math:`alpha` and :math:`beta`
@@ -198,15 +174,9 @@ class LocalTrendParams(Params):
         linear constraint:
 
         .. math::
+
             2 \alpha + \beta \\le 4
 
-        (see [1]_).
-
-        References
-        ----------
-        .. [1] Snyder, R.D. et al. 2017.
-           Forecasting compositional time series: A state space approach
-           International Journal of Forecasting.
         """
         constraint_matrix = linalg.block_diag(np.eye(self.X_zero.size), np.array([[2, 1], [0, 1]]))
         ub = np.array([np.inf] * self.X_zero.size + [4.0] + [np.inf])
@@ -218,19 +188,16 @@ class LocalLevelForecaster:
 
     Notes
     -----
+
     The local level model is described by the following equations:
+
     .. math::
-        y_t = x_{t-1} + \\epsilon_t
-        l_t = x_{t-1} + g\\epsilon_t
+
+        y_t &= l_{t-1} + \epsilon_t \\ 
+        l_t &= l_{t-1} + g \epsilon_t
 
     where :math:`y_t` represents the unbounded time series observations that result from applying
-    the log-ratio transform [1]_.
-
-    References
-    ----------
-    .. [1] Snyder, R.D. et al. 2017.
-        Forecasting compositional time series: A state space approach
-        International Journal of Forecasting.
+    the log-ratio transform.
     """
 
     optim_params_: LocalLevelParams
@@ -300,31 +267,35 @@ class LocalLevelForecaster:
 
 
 class LocalTrendForecaster:
-    r"""Forecast using the local trend state-space model.
+    r"""Local trend state-space model forecaster.
 
     Notes
     -----
-    The local model is described by the following equations:
+    The local trend model is described by the following equations:
+
     .. math::
-        y_t = x_{t-1} + \\epsilon_t
-        l_t = x_{t-1} + g\\epsilon_t
 
-    where :math:`y_t` represents the unbounded time series observations at timestep t that result
-    from applying the log-ratio transform and :math:`x_t` can be decomposed into level and trend
-    vectors so that
+        \boldsymbol y_t &= \boldsymbol l_{t-1} + \boldsymbol b_{t-1} +        \boldsymbol \epsilon_t \\
+        \boldsymbol l_t &= \boldsymbol l_{t-1} + \boldsymbol b_{t-1} + \alpha \boldsymbol \epsilon_t \\
+        \boldsymbol b_t &= \boldsymbol b_{t-1} + \beta                        \boldsymbol \epsilon_t
 
-    .. math:
-        x_t = \begin{bmatrix}
-            l^{'}_{t} \\
-            b^{'}_{t}
-        \\end{bmatrix}
+    where :math:`y_t` represents the unbounded time series observations at timestep :math:`t` that
+    result from applying the log-ratio transform. :math:`l_t` and :math:`b_t` represent the level
+    and the trend, respectively.
+    
+    An equivalent expression is found by combining the level and trend into a unique matrix
+    :math:`\boldsymbol X`, so that
 
+    .. math::
+        \boldsymbol y_t' &= \boldsymbol w' \boldsymbol X_{t-1} + \boldsymbol \epsilon_t' \\
+        \boldsymbol X_t  &= \boldsymbol F \boldsymbol X_{t-1}  + \boldsymbol g \boldsymbol \epsilon_t'
 
-    References
-    ----------
-    .. [1] Snyder, R.D. et al. 2017.
-        Forecasting compositional time series: A state space approach
-        International Journal of Forecasting.
+    where
+
+    :math:`\boldsymbol X_t = \begin{bmatrix} \boldsymbol l^{'}_{t} \\ \boldsymbol b^{'}_{t} \end{bmatrix}`,
+    :math:`\boldsymbol w = \begin{bmatrix} 1 \\ 1 \end{bmatrix}`,
+    :math:`\boldsymbol F = \begin{bmatrix} 1 & 1 \\ 0 & 1 \end{bmatrix}` and
+    :math:`\boldsymbol g = \begin{bmatrix} \alpha \\ \beta \end{bmatrix}`.
     """
 
     optim_params_: LocalTrendParams

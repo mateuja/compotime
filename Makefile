@@ -16,5 +16,7 @@ format:
 	isort --profile black -l 100 .
 
 docs: ## Build documentation with Sphinx
+	rm -rf docs/source/_autosummary
+	rm -rf docs/build/*
 	$(MAKE) -C $(DOCS_DIR) html
 	
