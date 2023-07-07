@@ -4,8 +4,8 @@ compotime is a library for forecasting compositional time series in Python. At t
 
 ## Basic usage
 
-This example uses adapted data originally collected from the
-[evolution of disease burden by risk factor in the US (1990-2019)](https://ourworldindata.org/grapher/disease-burden-by-risk-factor?time=earliest..latest&country=~USA).
+This example uses adapted data that was originally collected from the
+evolution of [disease burden by risk factor in the US (1990-2019)](https://ourworldindata.org/grapher/disease-burden-by-risk-factor?time=earliest..latest&country=~USA).
 
 ```python
 import pandas as pd
