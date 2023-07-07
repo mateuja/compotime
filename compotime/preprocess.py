@@ -4,7 +4,7 @@ import pandas as pd
 
 
 def treat_small(y: pd.DataFrame, minimum: float) -> pd.DataFrame:
-    """Adjust the compositional time series so that no value is smaller than ``minimum`.
+    """Adjust the compositional time series so that no value is smaller than ``minimum``.
 
     Parameters
     ----------
@@ -13,7 +13,18 @@ def treat_small(y: pd.DataFrame, minimum: float) -> pd.DataFrame:
 
     Returns
     -------
-       Adjusted compositional time series.
+        Adjusted compositional time series.
+
+    Notes
+    -----
+        This adjustment ensures that, at each timestamp :math:`t`, the values of the time
+        series still sum to one (see [1]_).
+
+    References
+    ----------
+    .. [1] Snyder, R.D. et al. 2017
+       Forecasting compositional time series: A state space approach
+       International Journal of Forecasting.
     """
     y = y.copy()
     for idx, y_t in y.iterrows():

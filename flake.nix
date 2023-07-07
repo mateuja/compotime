@@ -1,31 +1,37 @@
 {
   description = "Compotime";
-
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs";
-    flake-utils.url = "github:numtide/flake-utils";
+  
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs";
+  inputs.poetry2nix = {
+    url = "github:nix-community/poetry2nix";
+    inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
+  outputs = { self, nixpkgs, poetry2nix }:
+    let
+      systems = [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ];
+      forAllSystems = nixpkgs.lib.genAttrs systems;
+    in
+    {
+      devShells = forAllSystems (system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ poetry2nix.overlay ];
+          };
 
-        app = pkgs.poetry2nix.mkPoetryApplication {
-          python = pkgs.python311;
-          projectDir = ./.;
-          preferWheels = true;
-        };
-
-        packageName = "compotime";
-      in {
-        packages.${packageName} = app;
-
-        defaultPackage = self.packages.${system}.${packageName};
-
-        devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [ poetry ];
-          inputsFrom = builtins.attrValues self.packages.${system};
-        };
-      });
+          poetryEnv = pkgs.poetry2nix.mkPoetryEnv {
+            projectDir = ./.;
+            editablePackageSources = {
+              compotime = ./compotime;
+            };
+            python = pkgs.python311;
+            preferWheels = true;
+            groups = [ "dev" "docs" ];
+          };
+        in
+        {
+          default = pkgs.mkShell { packages = [ poetryEnv pkgs.poetry pkgs.pandoc ]; };
+        });
+    };
 }
