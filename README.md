@@ -12,9 +12,9 @@ import pandas as pd
 
 from compotime import LocalTrendForecaster
 
-URL = "https://github.com/mateuja/compotime/blob/feature/configure_docs/examples/data/dbrf.csv"
+URL = "https://raw.githubusercontent.com/mateuja/compotime/feature/configure_docs/examples/data/dbrf.csv"
 
-time_series = pd.read_csv(URL)
+time_series = pd.read_csv(URL, parse_dates=["Year"], index_col="Year")
 
 model = LocalTrendForecaster()
 model.fit(time_series)
