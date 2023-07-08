@@ -29,14 +29,14 @@ def compositional_ts_array(
             shape=shape,
             elements=hnp.from_dtype(
                 np.dtype(float),
-                min_value=0.0,
-                max_value=1e20,
+                min_value=0.1,
+                max_value=0.6,
                 allow_nan=False,
             ),
         ),
     )
     # Add random jitter
-    array = np.abs(array + np.random.default_rng(0).standard_normal(array.shape))
+    array = array + np.abs(np.random.default_rng(0).normal(0.0, 0.1, array.shape))
     return array / array.sum(axis=1)[:, None]
 
 
