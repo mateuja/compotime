@@ -19,7 +19,7 @@ from typing import Optional, Union
 import numpy as np
 import pandas as pd
 from numpy.random import Generator
-from scipy import linalg, optimize
+from scipy import linalg, optimize, stats
 from scipy.optimize import Bounds, LinearConstraint
 from typing_extensions import Self
 
@@ -33,19 +33,18 @@ class Params(ABC):
 
     @classmethod
     @abc.abstractmethod
-    def init(cls, num_series: int, rng: Generator) -> Self:
+    def init(cls, time_series: pd.DataFrame, rng: Generator) -> Self:
         """Initialize parameters.
 
         Parameters
         ----------
-            num_series: Number of time series.
+            time_series: Observed time series.
             rng: Random number generator.
 
         Returns
         -------
             Initialized parameters.
         """
-        ...
 
     def __iter__(self) -> Iterator[np.ndarray]:
         """Iterate over the different parameters.
@@ -77,19 +76,19 @@ class LocalLevelParams(Params):
     g: np.ndarray
 
     @classmethod
-    def init(cls, num_series: int, rng: Generator) -> Self:
+    def init(cls, time_series: pd.DataFrame, rng: Generator) -> Self:
         """Initialize parameters.
 
         Parameters
         ----------
-            num_series: Number of time series.
+            time_series: Observed time series.
             rng: Random number generator.
 
         Returns
         -------
             Initialized parameters.
         """
-        X_zero = rng.uniform(-4, 1, (1, num_series))
+        X_zero = _initialize_X_zero(time_series, no_trend=True)
         g = rng.uniform(0, 2, 1)
         return cls(X_zero, g)
 
@@ -130,19 +129,19 @@ class LocalTrendParams(Params):
     g: np.ndarray
 
     @classmethod
-    def init(cls, num_series: int, rng: Generator) -> Self:
+    def init(cls, time_series: pd.DataFrame, rng: Generator) -> Self:
         """Initialize parameters.
 
         Parameters
         ----------
-            num_series: Number of time series.
+            time_series: Observed time series.
             rng: Random number generator.
 
         Returns
         -------
             Initialized parameters.
         """
-        X_zero = rng.uniform(-4, 1, (2, num_series))
+        X_zero = _initialize_X_zero(time_series, no_trend=False)
         g = rng.uniform(0, 1, (2, 1))
         return cls(X_zero, g)
 
@@ -453,8 +452,7 @@ def _fit_local_level(y: np.ndarray, rng: Generator) -> LocalLevelParams:
     -------
         Optimized parameters for the observed data.
     """
-    num_series = y.shape[1]
-    params = LocalLevelParams.init(num_series, rng)
+    params = LocalLevelParams.init(y, rng)
     flat_params, shapes = _flatten_params(params)
 
     opt_params = optimize.minimize(
@@ -482,8 +480,7 @@ def _fit_local_trend(y: np.ndarray, rng: Generator) -> LocalTrendParams:
     -------
         Optimized parameters for the observed data.
     """
-    num_series = y.shape[1]
-    params = LocalTrendParams.init(num_series, rng)
+    params = LocalTrendParams.init(y, rng)
     flat_params, shapes = _flatten_params(params)
 
     opt_params = optimize.minimize(
@@ -498,6 +495,36 @@ def _fit_local_trend(y: np.ndarray, rng: Generator) -> LocalTrendParams:
     opt_params = _unflatten_params(opt_params, shapes)
 
     return LocalTrendParams(*opt_params)
+
+
+def _initialize_X_zero(y: np.ndarray, no_trend: bool) -> np.ndarray:  # noqa: FBT001, N802
+    """Initialize the seed state matrix.
+
+    For each of the time series, a linear regression is fitted with the first available ten points
+    (less if the series are shorter). The level is set to be equal to the intercept, and the trend,
+    if required, is set to be equal to the slope.
+
+    Parameters
+    ----------
+        y: Observed time series.
+        no_trend: Whether no trend is required. This should be ``True`` for the
+            ``LocalLevelForecaster``.
+
+    Returns
+    -------
+        Initialized seed state matrix.
+    """
+    regressions = []
+    for col in y.T:
+        no_nan_col = col[~np.isnan(col)][:10]
+        regressions.append(stats.linregress(range(len(no_nan_col)), no_nan_col))
+
+    intercepts = np.array([reg.intercept for reg in regressions])
+    if no_trend:
+        return intercepts.reshape(1, -1)
+
+    slopes = np.array([reg.slope for reg in regressions])
+    return np.vstack([intercepts, slopes])
 
 
 def _predict_local_trend(horizon: int, X_last: np.ndarray) -> np.ndarray:
