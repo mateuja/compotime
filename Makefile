@@ -2,13 +2,16 @@ PACKAGE=compotime
 TEST_DIR=./tests
 DOCS_DIR=./docs
 
-.PHONY: tests lint format docs
+.PHONY: tests lint jupyter format docs
 
 tests:
-	pytest $(TEST_DIR)
+	pytest -n auto $(TEST_DIR)
 
 lint:
 	ruff compotime tests
+
+jupyter:
+	export PYTHONPATH=$(shell pwd) && jupyter-lab
 
 format:
 	black .
