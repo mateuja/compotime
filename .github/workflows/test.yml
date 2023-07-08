@@ -39,5 +39,5 @@ jobs:
 
       - name: Build documentation
         run: |
-          make docs
+          poetry run make docs
   
