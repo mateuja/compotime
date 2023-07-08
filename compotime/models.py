@@ -14,6 +14,7 @@ import abc
 from abc import ABC
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -21,6 +22,10 @@ from numpy.random import Generator
 from scipy import linalg, optimize
 from scipy.optimize import Bounds, LinearConstraint
 from typing_extensions import Self
+
+
+class FreqInferenceError(Exception):
+    """Error raised when an index frequency cannot be inferred."""
 
 
 class Params(ABC):
@@ -220,6 +225,7 @@ class LocalLevelForecaster:
     fitted_curve_: pd.DataFrame
     colnames_: pd.Index
     time_idx_: pd.Index
+    idx_freq_: Optional[str]
 
     def fit(self, y: pd.DataFrame, random_state: int = 0) -> Self:
         """Fit the model.
@@ -237,6 +243,7 @@ class LocalLevelForecaster:
         rng = np.random.default_rng(random_state)
         self.colnames_ = y.columns
         self.time_idx_ = y.index
+        self.idx_freq_ = _get_idx_freq(self.time_idx_)
 
         log_y = _log_ratio(y.values)
 
@@ -262,21 +269,9 @@ class LocalLevelForecaster:
         -------
             Predicted time series.
         """
-        # TODO: Improve handling of different types of indexes
-        if isinstance(self.time_idx_, pd.PeriodIndex):
-            date_range = pd.period_range
-        else:
-            date_range = pd.date_range
-
-        freq = self.time_idx_.inferred_freq
-        preds_idx = date_range(
-            self.time_idx_.max() + pd.tseries.frequencies.to_offset(freq),
-            periods=horizon,
-            freq=freq,
-        )
         return pd.DataFrame(
             _inv_log_ratio(np.tile(self.X_[-1], (horizon, 1))),
-            preds_idx,
+            _get_preds_idx(horizon, self.time_idx_, self.idx_freq_),
             self.colnames_,
         )
 
@@ -321,6 +316,7 @@ class LocalTrendForecaster:
     fitted_curve_: pd.DataFrame
     colnames_: pd.Index
     time_idx_: pd.Index
+    idx_freq_: Optional[str]
 
     def fit(self, y: pd.DataFrame, random_state: int = 0) -> Self:
         """Fit the model.
@@ -338,6 +334,7 @@ class LocalTrendForecaster:
         rng = np.random.default_rng(random_state)
         self.colnames_ = y.columns
         self.time_idx_ = y.index
+        self.idx_freq_ = _get_idx_freq(self.time_idx_)
 
         log_y = _log_ratio(y.values)
 
@@ -360,21 +357,9 @@ class LocalTrendForecaster:
         -------
             Predicted time series.
         """
-        # TODO: Improve handling of different types of indexes
-        if isinstance(self.time_idx_, pd.PeriodIndex):
-            date_range = pd.period_range
-        else:
-            date_range = pd.date_range
-
-        freq = self.time_idx_.inferred_freq
-        preds_idx = date_range(
-            self.time_idx_.max() + pd.tseries.frequencies.to_offset(freq),
-            periods=horizon,
-            freq=freq,
-        )
         return pd.DataFrame(
             _inv_log_ratio(_predict_local_trend(horizon, self.X_[-1])),
-            preds_idx,
+            _get_preds_idx(horizon, self.time_idx_, self.idx_freq_),
             self.colnames_,
         )
 
@@ -444,7 +429,7 @@ def _unflatten_params(
     -------
         Multiple parameters with various shapes.
     """
-    cutoffs = np.cumsum([np.product(shape) for shape in shapes], dtype=int)
+    cutoffs = np.cumsum([np.prod(shape) for shape in shapes], dtype=int)
 
     params = []
     prev_cutoff = 0
@@ -675,3 +660,66 @@ def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
         fitted_curve.append(fitted)
 
     return latent_states, np.vstack(fitted_curve), np.vstack(errors)
+
+
+def _get_idx_freq(idx: Union[pd.DatetimeIndex, pd.PeriodIndex, pd.RangeIndex]) -> Optional[str]:
+    """Get the frequency of the index, if it has any.
+
+    Parameters
+    ----------
+        idx: Index of the time series.
+
+    Returns
+    -------
+        Frequency of the time series.
+
+    Raises
+    ------
+        ValueError: If the index is a PeriodIndex or DatetimeIndex but the frequency cannot be
+            inferred.
+    """
+    if isinstance(idx, (pd.PeriodIndex, pd.DatetimeIndex)):
+        idx_freq = idx.freq if idx.freq else pd.infer_freq(idx)
+        if idx_freq is None:
+            msg = "Cannot infer the frequency of the given time series"
+            raise FreqInferenceError(msg)
+    else:
+        idx_freq = None
+    return idx_freq
+
+
+def _get_preds_idx(
+    horizon: int,
+    time_idx: Union[pd.DatetimeIndex, pd.PeriodIndex, pd.RangeIndex],
+    freq: Optional[str],
+) -> pd.Index:
+    """Get the index for the predictions.
+
+    Parameters
+    ----------
+        horizon: Number of steps to be predicted into the future.
+        time_idx: Index of the fitted time series.
+        freq: Frequency of the fitted time series index.
+
+    Returns
+    -------
+        Index of the predictions.
+    """
+    if isinstance(time_idx, pd.RangeIndex):
+        preds_idx = pd.RangeIndex.from_range(range(horizon))
+
+    elif isinstance(time_idx, pd.PeriodIndex):
+        preds_idx = pd.period_range(
+            time_idx.max() + pd.tseries.frequencies.to_offset(freq),
+            periods=horizon,
+            freq=freq,
+        )
+
+    else:
+        preds_idx = pd.date_range(
+            time_idx.max() + pd.tseries.frequencies.to_offset(freq),
+            periods=horizon,
+            freq=freq,
+        )
+
+    return preds_idx

@@ -5,7 +5,7 @@ DOCS_DIR=./docs
 .PHONY: tests cov lint format docs
 
 tests:
-	pytest $(TEST_DIR)
+	pytest -n auto $(TEST_DIR)
 
 lint:
 	ruff compotime tests
