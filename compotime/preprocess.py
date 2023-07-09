@@ -26,6 +26,12 @@ def treat_small(y: pd.DataFrame, minimum: float) -> pd.DataFrame:
        Forecasting compositional time series: A state space approach
        International Journal of Forecasting.
     """
+    if minimum * y.shape[1] > 1:
+        msg = "It is possible to satisfy the sum one constraint with the given ``minimum`` value."
+        raise ValueError(
+            msg,
+        )
+
     y = y.copy()
     for idx, y_t in y.iterrows():
         is_below_min = y_t < minimum
