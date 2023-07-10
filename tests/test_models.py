@@ -1,7 +1,7 @@
 """Unit tests for state space models."""
 import datetime
 import itertools
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -9,60 +9,11 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from hypothesis.extra import numpy as hnp
-from hypothesis.strategies import DataObject, DrawFn
+from hypothesis.strategies import DataObject
 
 from compotime import LocalLevelForecaster, LocalTrendForecaster, models
 
-
-@st.composite
-def compositional_ts_array(
-    draw: DrawFn,
-    shape: Optional[tuple[int, int]] = None,
-):
-    """Strategy to generate a numpy array of compositional time series."""
-    if not shape:
-        shape = hnp.array_shapes(min_dims=2, max_dims=2, min_side=2)
-
-    array = draw(
-        hnp.arrays(
-            np.dtype(float),
-            shape=shape,
-            elements=hnp.from_dtype(
-                np.dtype(float),
-                min_value=0.1,
-                max_value=0.6,
-                allow_nan=False,
-            ),
-        ),
-    )
-    # Add random jitter
-    array = array + np.abs(np.random.default_rng(0).normal(0.0, 0.1, array.shape))
-    return array / array.sum(axis=1)[:, None]
-
-
-@st.composite
-def compositional_ts(
-    draw: DrawFn,
-    index_type: Union[
-        type[pd.RangeIndex],
-        type[pd.PeriodIndex],
-        type[pd.DatetimeIndex],
-    ] = pd.DatetimeIndex,
-    shape: Optional[tuple[int, int]] = None,
-):
-    """Strategy to generate a dataframe of compositional time series."""
-    array = draw(compositional_ts_array(shape=shape))
-
-    if index_type == pd.DatetimeIndex:
-        ts_index = pd.date_range("2020-01-01", periods=len(array), freq="D")
-    elif index_type == pd.PeriodIndex:
-        ts_index = pd.period_range("2020-01", periods=len(array), freq="M")
-    elif index_type == pd.RangeIndex:
-        ts_index = pd.RangeIndex.from_range(range(len(array)))
-    else:
-        raise NotImplementedError
-
-    return pd.DataFrame(array, index=ts_index)
+from ._utils import compositional_ts, compositional_ts_array
 
 
 @settings(max_examples=10, deadline=datetime.timedelta(seconds=20))
@@ -95,7 +46,9 @@ def test_models_should_work_with_different_types_of_indexes(
 ):
     """Test that models work with different types of pandas indexes."""
     time_series = data.draw(compositional_ts(index_type=index_type, shape=shape))
-    model().fit(time_series).predict(5)
+    fcsts = model().fit(time_series).predict(5)
+
+    assert fcsts.index.name == time_series.index.name == "date"
 
 
 @given(st.lists(hnp.from_dtype(np.dtype(float)), min_size=1))
