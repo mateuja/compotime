@@ -48,7 +48,7 @@ def test_models_should_work_with_different_types_of_indexes(
     time_series = data.draw(compositional_ts(index_type=index_type, shape=shape))
     fcsts = model().fit(time_series).predict(5)
 
-    assert fcsts.index.name == time_series.index.name
+    assert fcsts.index.name == time_series.index.name == "date"
 
 
 @given(st.lists(hnp.from_dtype(np.dtype(float)), min_size=1))
