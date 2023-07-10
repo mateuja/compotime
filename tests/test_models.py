@@ -62,6 +62,8 @@ def compositional_ts(
     else:
         raise NotImplementedError
 
+    ts_index.name = "date"
+
     return pd.DataFrame(array, index=ts_index)
 
 
@@ -95,7 +97,9 @@ def test_models_should_work_with_different_types_of_indexes(
 ):
     """Test that models work with different types of pandas indexes."""
     time_series = data.draw(compositional_ts(index_type=index_type, shape=shape))
-    model().fit(time_series).predict(5)
+    fcsts = model().fit(time_series).predict(5)
+
+    assert fcsts.index.name == time_series.index.name
 
 
 @given(st.lists(hnp.from_dtype(np.dtype(float)), min_size=1))

@@ -749,4 +749,6 @@ def _get_preds_idx(
             freq=freq,
         )
 
+    preds_idx.name = time_idx.name
+
     return preds_idx
