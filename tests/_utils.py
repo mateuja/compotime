@@ -56,4 +56,6 @@ def compositional_ts(
     else:
         raise NotImplementedError
 
+    ts_index.name = "date"
+
     return pd.DataFrame(array, index=ts_index)
