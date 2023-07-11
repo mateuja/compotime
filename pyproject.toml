@@ -14,7 +14,7 @@ typing-extensions = "^4.6.3"
 
 [tool.poetry.group.dev.dependencies]
 black = {extras = ["jupyter"], version = "^23.3.0"}
-ruff = "^0.0.274"
+ruff = "^0.0.277"
 pytest = "^7.4.0"
 hypothesis = "^6.81.1"
 ipython = "^8.14.0"
