@@ -18,10 +18,12 @@ from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
-from numpy.random import Generator
 from scipy import linalg, optimize, stats
 from scipy.optimize import Bounds, LinearConstraint
 from typing_extensions import Self
+
+INITIAL_ALPHA = 0.1
+INITIAL_BETA = 0.01
 
 
 class FreqInferenceError(Exception):
@@ -31,15 +33,17 @@ class FreqInferenceError(Exception):
 class Params(ABC):
     """Parameters abstract class."""
 
+    X_zero: np.ndarray
+    g: np.ndarray
+
     @classmethod
     @abc.abstractmethod
-    def init(cls, time_series: pd.DataFrame, rng: Generator) -> Self:
-        """Initialize parameters.
+    def init(cls, time_series: np.ndarray) -> None:
+        """Initialize parameters based on the observed time series.
 
         Parameters
         ----------
             time_series: Observed time series.
-            rng: Random number generator.
 
         Returns
         -------
@@ -76,20 +80,19 @@ class LocalLevelParams(Params):
     g: np.ndarray
 
     @classmethod
-    def init(cls, time_series: pd.DataFrame, rng: Generator) -> Self:
+    def init(cls, time_series: np.ndarray) -> None:
         """Initialize parameters.
 
         Parameters
         ----------
             time_series: Observed time series.
-            rng: Random number generator.
 
         Returns
         -------
             Initialized parameters.
         """
         X_zero = _initialize_X_zero(time_series, no_trend=True)
-        g = rng.uniform(0, 2, 1)
+        g = np.array([INITIAL_ALPHA])
         return cls(X_zero, g)
 
     @property
@@ -129,7 +132,7 @@ class LocalTrendParams(Params):
     g: np.ndarray
 
     @classmethod
-    def init(cls, time_series: pd.DataFrame, rng: Generator) -> Self:
+    def init(cls, time_series: np.ndarray) -> None:
         """Initialize parameters.
 
         Parameters
@@ -142,7 +145,7 @@ class LocalTrendParams(Params):
             Initialized parameters.
         """
         X_zero = _initialize_X_zero(time_series, no_trend=False)
-        g = rng.uniform(0, 1, (2, 1))
+        g = np.array([[INITIAL_ALPHA], [INITIAL_BETA]])
         return cls(X_zero, g)
 
     @property
@@ -226,27 +229,25 @@ class LocalLevelForecaster:
     time_idx_: pd.Index
     idx_freq_: Optional[str]
 
-    def fit(self, y: pd.DataFrame, random_state: int = 0) -> Self:
+    def fit(self, y: pd.DataFrame) -> Self:
         """Fit the model.
 
         Parameters
         ----------
             y: Time series dataframe, where rows represent the timestamps and columns the
                 different shares series.
-            random_state: Random state to initialize the random generator.
 
         Returns
         -------
             Fitted instance of the model.
         """
-        rng = np.random.default_rng(random_state)
         self.colnames_ = y.columns
         self.time_idx_ = y.index
         self.idx_freq_ = _get_idx_freq(self.time_idx_)
 
         log_y = _log_ratio(y.values)
 
-        self.optim_params_ = _fit_local_level(log_y, rng)
+        self.optim_params_ = _fit_local_level(log_y)
         self.X_, fitted_curve, _ = _forward(
             self.optim_params_.X_zero,
             self.optim_params_.g,
@@ -317,27 +318,25 @@ class LocalTrendForecaster:
     time_idx_: pd.Index
     idx_freq_: Optional[str]
 
-    def fit(self, y: pd.DataFrame, random_state: int = 0) -> Self:
+    def fit(self, y: pd.DataFrame) -> Self:
         """Fit the model.
 
         Parameters
         ----------
             y: Time series dataframe, where rows represent the timestamps and columns the
                 different shares series.
-            random_state: Random state to initialize the random generator.
 
         Returns
         -------
             Fitted instance of the model.
         """
-        rng = np.random.default_rng(random_state)
         self.colnames_ = y.columns
         self.time_idx_ = y.index
         self.idx_freq_ = _get_idx_freq(self.time_idx_)
 
         log_y = _log_ratio(y.values)
 
-        self.optim_params_ = _fit_local_trend(log_y, rng)
+        self.optim_params_ = _fit_local_trend(log_y)
 
         self.X_, fitted_curve, _ = _forward(self.optim_params_.X_zero, self.optim_params_.g, log_y)
 
@@ -440,19 +439,18 @@ def _unflatten_params(
     return params
 
 
-def _fit_local_level(y: np.ndarray, rng: Generator) -> LocalLevelParams:
+def _fit_local_level(y: np.ndarray) -> LocalLevelParams:
     """Find the optimal parameters of a local level model for the given data.
 
     Parameters
     ----------
         y: Time series data.
-        rng: Random number generator.
 
     Returns
     -------
         Optimized parameters for the observed data.
     """
-    params = LocalLevelParams.init(y, rng)
+    params = LocalLevelParams.init(y)
     flat_params, shapes = _flatten_params(params)
 
     opt_params = optimize.minimize(
@@ -468,19 +466,18 @@ def _fit_local_level(y: np.ndarray, rng: Generator) -> LocalLevelParams:
     return LocalLevelParams(*opt_params)
 
 
-def _fit_local_trend(y: np.ndarray, rng: Generator) -> LocalTrendParams:
+def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
     """Find the optimal parameters of a local trend model for the given data.
 
     Parameters
     ----------
         y: Time series data.
-        rng: Random number generator.
 
     Returns
     -------
         Optimized parameters for the observed data.
     """
-    params = LocalTrendParams.init(y, rng)
+    params = LocalTrendParams.init(y)
     flat_params, shapes = _flatten_params(params)
 
     opt_params = optimize.minimize(
