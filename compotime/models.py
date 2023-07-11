@@ -590,7 +590,7 @@ def _log_mle_gen_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
         gen_var_log = _adj_log_mle_gen_var(y, errors)
     else:
         _, gen_var_log = np.linalg.slogdet(
-            sum(error.reshape(-1, 1) @ error.reshape(1, -1) for error in errors) / n,
+            np.matmul(errors.T, errors) / n,
         )
     return gen_var_log
 
@@ -612,12 +612,7 @@ def _adj_log_mle_gen_var(y: np.ndarray, errors: np.ndarray) -> float:
         for TS with NaN values.
     """
     num_not_nan = (~np.isnan(y)).sum(axis=0)
-    covar = np.zeros((y.shape[1], y.shape[1]))
-    for i in range(y.shape[1]):
-        for j in range(i, y.shape[1]):
-            covar[i, j] = (errors[:, i] * errors[:, j]).sum() / min(num_not_nan[i], num_not_nan[j])
-
-    covar = covar + covar.T - np.diag(np.diagonal(covar))
+    covar = (errors.T @ errors) / np.minimum(num_not_nan[:, np.newaxis], num_not_nan)
 
     adj_gen_var = 0
     for y_t in y:

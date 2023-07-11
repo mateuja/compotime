@@ -23,6 +23,8 @@ def test_treat_small_should_raise_error_if_minimum_is_too_large(time_series: pd.
 
     At most, the value should be equal to 1.0 / time_series.shape[1].
     """
-    error_msg = "It is possible to satisfy the sum one constraint with the given ``minimum`` value."
+    error_msg = (
+        "It is not possible to satisfy the sum one constraint with the given ``minimum`` value."
+    )
     with pytest.raises(ValueError, match=error_msg):
         preprocess.treat_small(time_series, 1.0 / time_series.shape[1] + 0.01)
