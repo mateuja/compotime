@@ -27,7 +27,9 @@ def treat_small(y: pd.DataFrame, minimum: float) -> pd.DataFrame:
        International Journal of Forecasting.
     """
     if minimum * y.shape[1] > 1:
-        msg = "It is possible to satisfy the sum one constraint with the given ``minimum`` value."
+        msg = (
+            "It is not possible to satisfy the sum one constraint with the given ``minimum`` value."
+        )
         raise ValueError(
             msg,
         )
