@@ -11,6 +11,7 @@ References
     International Journal of Forecasting.
 """
 import abc
+import logging
 from abc import ABC
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
@@ -24,6 +25,11 @@ from typing_extensions import Self
 
 INITIAL_ALPHA = 0.1
 INITIAL_BETA = 0.01
+
+ALPHA_BOUNDS = (0.0, 2.0)
+BETA_BOUNDS = (0.0, 4.0)
+
+_LOCAL_TREND_G_SUM_CONSTRAINT = 4.0
 
 
 class FreqInferenceError(Exception):
@@ -108,7 +114,7 @@ class LocalLevelParams(Params):
         In the local level model, `g` values must be within the range between 0 and 2, both
         included.
         """
-        lower, upper = zip(*([(-np.inf, np.inf)] * self.X_zero.size + [(0.0, 2.0)]))
+        lower, upper = zip(*([(-np.inf, np.inf)] * self.X_zero.size + [ALPHA_BOUNDS]))
         return Bounds(lower, upper)
 
 
@@ -162,7 +168,7 @@ class LocalTrendParams(Params):
         In the local trend model, `g` can be decomposed into :math:`\alpha` and :math:`\beta`
         parameters, which must be greater than or equal to zero.
         """
-        lower, upper = zip(*([(-np.inf, np.inf)] * self.X_zero.size + [(0.0, np.inf)] * 2))
+        lower, upper = zip(*([(-np.inf, np.inf)] * self.X_zero.size + [ALPHA_BOUNDS, BETA_BOUNDS]))
         return Bounds(lower, upper)
 
     @property
@@ -450,18 +456,21 @@ def _fit_local_level(y: np.ndarray) -> LocalLevelParams:
     -------
         Optimized parameters for the observed data.
     """
-    params = LocalLevelParams.init(y)
-    flat_params, shapes = _flatten_params(params)
+    initial_params = LocalLevelParams.init(y)
+    flat_params, shapes = _flatten_params(initial_params)
 
-    opt_params = optimize.minimize(
+    opt_res = optimize.minimize(
         _objective,
         flat_params,
         (shapes, y),
-        method="trust-constr",
-        bounds=params.bounds,
-    ).x
+        method="Nelder-Mead",
+        bounds=initial_params.bounds,
+    )
 
-    opt_params = _unflatten_params(opt_params, shapes)
+    if not opt_res.success:
+        logging.warning("Optimization finished unsuccessfully: %s", opt_res.message)
+
+    opt_params = _unflatten_params(opt_res.x, shapes)
 
     return LocalLevelParams(*opt_params)
 
@@ -477,19 +486,28 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
     -------
         Optimized parameters for the observed data.
     """
-    params = LocalTrendParams.init(y)
-    flat_params, shapes = _flatten_params(params)
+    initial_X_zero = _initialize_X_zero(y, False)  # noqa: FBT003,N806
+    initial_g = optimize.brute(
+        _objective_initial_g,
+        (ALPHA_BOUNDS, BETA_BOUNDS),
+        (initial_X_zero, y),
+    ).reshape(2, 1)
 
-    opt_params = optimize.minimize(
+    initial_params = LocalTrendParams(initial_X_zero, initial_g)
+    flat_params, shapes = _flatten_params(initial_params)
+
+    opt_res = optimize.minimize(
         _objective,
         flat_params,
         (shapes, y),
-        method="trust-constr",
-        bounds=params.bounds,
-        constraints=params.constraints,
-    ).x
+        method="Nelder-Mead",
+        bounds=initial_params.bounds,
+    )
 
-    opt_params = _unflatten_params(opt_params, shapes)
+    if not opt_res.success:
+        logging.warning("Optimization finished unsuccessfully: %s", opt_res.message)
+
+    opt_params = _unflatten_params(opt_res.x, shapes)
 
     return LocalTrendParams(*opt_params)
 
@@ -549,6 +567,26 @@ def _predict_local_trend(horizon: int, X_last: np.ndarray) -> np.ndarray:
     return np.vstack(preds)
 
 
+def _objective_initial_g(g: np.ndarray, X_zero: np.ndarray, y: np.ndarray) -> float:
+    """Objective function to find a good initial ``g`` aproximation.
+
+    Parameters
+    ----------
+        g: Initial value for g.
+        X_zero: Initial value for ``X_zero``.
+        y: Observations of the time series to be forecasted.
+
+    Returns
+    -------
+        Objective function to minimize the negative loglikelihood of ``g`` conditioned on a fixed
+        ``X_zero``.
+    """
+    if g.sum() > _LOCAL_TREND_G_SUM_CONSTRAINT:
+        return np.inf
+
+    return _log_mle_gen_var(X_zero, g.reshape(2, 1), y)
+
+
 def _objective(flat_params: np.ndarray, shapes: tuple[int], y: np.ndarray) -> float:
     """Objective function to be optimized by the local level and local trend models.
 
@@ -564,6 +602,10 @@ def _objective(flat_params: np.ndarray, shapes: tuple[int], y: np.ndarray) -> fl
         Objective function to minimize the negative loglikelihood of the given parameters.
     """
     X_zero, g = _unflatten_params(flat_params, shapes)
+
+    if g.size == 2 and g.sum() > 4:  # noqa: PLR2004
+        return np.inf
+
     return _log_mle_gen_var(X_zero, g, y)
 
 
