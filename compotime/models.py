@@ -579,7 +579,7 @@ def _objective_initial_g(g: np.ndarray, X_zero: np.ndarray, y: np.ndarray) -> fl
         Objective function to minimize the negative loglikelihood of ``g`` conditioned on a fixed
         ``X_zero``.
     """
-    if g[0] * 2 + g[1] > 4:
+    if g[0] * 2 + g[1] > 4:  # noqa: PLR2004
         return np.inf
 
     return _log_mle_gen_var(X_zero, g.reshape(2, 1), y)
@@ -601,7 +601,7 @@ def _objective(flat_params: np.ndarray, shapes: tuple[int], y: np.ndarray) -> fl
     """
     X_zero, g = _unflatten_params(flat_params, shapes)
 
-    if g.size == 2 and g[0] * 2 + g[1] > 4:
+    if g.size == 2 and g[0] * 2 + g[1] > 4:  # noqa: PLR2004
         return np.inf
 
     return _log_mle_gen_var(X_zero, g, y)
