@@ -42,7 +42,7 @@ class Params(ABC):
 
     @classmethod
     @abc.abstractmethod
-    def init(cls, time_series: np.ndarray) -> None:
+    def init(cls, time_series: np.ndarray) -> Self:
         """Initialize parameters based on the observed time series.
 
         Parameters
@@ -84,7 +84,7 @@ class LocalLevelParams(Params):
     g: np.ndarray
 
     @classmethod
-    def init(cls, time_series: np.ndarray) -> None:
+    def init(cls, time_series: np.ndarray) -> Self:
         """Initialize parameters.
 
         Parameters
