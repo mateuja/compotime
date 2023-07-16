@@ -5,8 +5,7 @@ compotime is a library for forecasting compositional time series in Python. At t
 
 ## Basic usage
 
-This example uses adapted data on the  
-[share of energy consumption by source (1965-2021)](https://ourworldindata.org/grapher/share-energy-source-sub) in the world.
+This example uses adapted data on the global [share of energy consumption by source (1965-2021)](https://ourworldindata.org/grapher/share-energy-source-sub).
 
 ```python
 import pandas as pd
