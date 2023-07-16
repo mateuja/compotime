@@ -29,8 +29,6 @@ INITIAL_BETA = 0.01
 ALPHA_BOUNDS = (0.0, 2.0)
 BETA_BOUNDS = (0.0, 4.0)
 
-_LOCAL_TREND_G_SUM_CONSTRAINT = 4.0
-
 
 class FreqInferenceError(Exception):
     """Error raised when an index frequency cannot be inferred."""
@@ -465,6 +463,7 @@ def _fit_local_level(y: np.ndarray) -> LocalLevelParams:
         (shapes, y),
         method="Nelder-Mead",
         bounds=initial_params.bounds,
+        options={"maxfev": flat_params.size * 1000},
     )
 
     if not opt_res.success:
@@ -488,9 +487,7 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
     """
     initial_X_zero = _initialize_X_zero(y, False)  # noqa: FBT003,N806
     initial_g = optimize.brute(
-        _objective_initial_g,
-        (ALPHA_BOUNDS, BETA_BOUNDS),
-        (initial_X_zero, y),
+        _objective_initial_g, (ALPHA_BOUNDS, BETA_BOUNDS), (initial_X_zero, y), Ns=50,
     ).reshape(2, 1)
 
     initial_params = LocalTrendParams(initial_X_zero, initial_g)
@@ -502,6 +499,7 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
         (shapes, y),
         method="Nelder-Mead",
         bounds=initial_params.bounds,
+        options={"maxfev": flat_params.size * 1000},
     )
 
     if not opt_res.success:
@@ -581,7 +579,7 @@ def _objective_initial_g(g: np.ndarray, X_zero: np.ndarray, y: np.ndarray) -> fl
         Objective function to minimize the negative loglikelihood of ``g`` conditioned on a fixed
         ``X_zero``.
     """
-    if g.sum() > _LOCAL_TREND_G_SUM_CONSTRAINT:
+    if g[0] * 2 + g[1] > 4:
         return np.inf
 
     return _log_mle_gen_var(X_zero, g.reshape(2, 1), y)
@@ -603,7 +601,7 @@ def _objective(flat_params: np.ndarray, shapes: tuple[int], y: np.ndarray) -> fl
     """
     X_zero, g = _unflatten_params(flat_params, shapes)
 
-    if g.size == 2 and g.sum() > 4:  # noqa: PLR2004
+    if g.size == 2 and g[0] * 2 + g[1] > 4:
         return np.inf
 
     return _log_mle_gen_var(X_zero, g, y)

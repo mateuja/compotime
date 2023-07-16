@@ -5,17 +5,18 @@ compotime is a library for forecasting compositional time series in Python. At t
 
 ## Basic usage
 
-This example uses adapted data from the evolution of
-[disease burden by risk factor in the US (1990-2019)](https://ourworldindata.org/grapher/disease-burden-by-risk-factor?time=earliest..latest&country=~USA).
+This example uses adapted data on the  
+[share of energy consumption by source (1965-2021)](https://ourworldindata.org/grapher/share-energy-source-sub) in the world.
 
 ```python
 import pandas as pd
 
 from compotime import LocalTrendForecaster
 
-URL = "https://raw.githubusercontent.com/mateuja/compotime/feature/configure_docs/examples/data/dbrf.csv"
+URL = "https://raw.githubusercontent.com/mateuja/compotime/feature/configure_docs/examples/data/share_energy_source.csv"
 
-time_series = pd.read_csv(URL, parse_dates=["Year"], index_col="Year")
+date_parser = lambda x: pd.Period(x, "Y")
+time_series = pd.read_csv(URL, parse_dates=["Year"], date_parser=date_parser).set_index("Year")
 
 model = LocalTrendForecaster()
 model.fit(time_series)
