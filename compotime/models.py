@@ -15,7 +15,7 @@ import logging
 from abc import ABC
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -486,9 +486,13 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
         Optimized parameters for the observed data.
     """
     initial_X_zero = _initialize_X_zero(y, False)  # noqa: FBT003,N806
-    initial_g = optimize.brute(
-        _objective_initial_g, (ALPHA_BOUNDS, BETA_BOUNDS), (initial_X_zero, y), Ns=50,
-    ).reshape(2, 1)
+    initial_g = _find_initial_g(
+        _objective_initial_g,
+        (ALPHA_BOUNDS, BETA_BOUNDS),
+        initial_X_zero,
+        y,
+        num=50,
+    )
 
     initial_params = LocalTrendParams(initial_X_zero, initial_g)
     flat_params, shapes = _flatten_params(initial_params)
@@ -508,6 +512,49 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
     opt_params = _unflatten_params(opt_res.x, shapes)
 
     return LocalTrendParams(*opt_params)
+
+
+def _find_initial_g(
+    objective: Callable[..., float],
+    bounds: Sequence[tuple[float, float]],
+    initial_X_zero: np.ndarray,  # noqa: N803
+    y: np.ndarray,
+    num: int = 50,
+) -> np.ndarray:
+    """Find an initial value for ``g`` in the local trend model.
+
+    An optimization by brute force is computed along a grid of values, given a fixed X_zero and the
+    time series observations.
+
+    Parameters
+    ----------
+        objective: Objective function to be minimized.
+        bounds: Bounds for alpha and beta.
+        initial_X_zero: Initial values for X_zero.
+        y: Observed time series.
+
+    Returns
+    -------
+        Initial ``g``.
+    """
+    alphas, betas = map(
+        np.ravel,
+        np.meshgrid(*[np.linspace(lower, upper, num) for lower, upper in bounds]),
+    )
+
+    best_score = np.inf
+    best_val = np.array([[INITIAL_ALPHA], [INITIAL_BETA]])
+    for alpha, beta in zip(alphas, betas):
+        if 2 * alpha + beta > 4:  # noqa: PLR2004
+            continue
+
+        current_val = np.array([[alpha], [beta]])
+        current_score = objective(current_val, initial_X_zero, y)
+        if current_score < best_score:
+            best_score = current_score
+            best_val = current_val
+
+    return best_val
 
 
 def _initialize_X_zero(y: np.ndarray, no_trend: bool) -> np.ndarray:  # noqa: FBT001, N802
@@ -579,10 +626,7 @@ def _objective_initial_g(g: np.ndarray, X_zero: np.ndarray, y: np.ndarray) -> fl
         Objective function to minimize the negative loglikelihood of ``g`` conditioned on a fixed
         ``X_zero``.
     """
-    if g[0] * 2 + g[1] > 4:  # noqa: PLR2004
-        return np.inf
-
-    return _log_mle_gen_var(X_zero, g.reshape(2, 1), y)
+    return _log_mle_gen_var(X_zero, g, y)
 
 
 def _objective(flat_params: np.ndarray, shapes: tuple[int], y: np.ndarray) -> float:
@@ -765,7 +809,7 @@ def _get_preds_idx(
         Index of the predictions.
     """
     if isinstance(time_idx, pd.RangeIndex):
-        preds_idx = pd.RangeIndex.from_range(range(horizon))
+        preds_idx = pd.RangeIndex.from_range(range(horizon)) + len(time_idx)
 
     elif isinstance(time_idx, pd.PeriodIndex):
         preds_idx = pd.period_range(
