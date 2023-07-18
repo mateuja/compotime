@@ -539,23 +539,6 @@ def _predict_local_trend(horizon: int, X_last: np.ndarray) -> np.ndarray:
     return np.vstack(preds)
 
 
-def _objective_initial_g(g: np.ndarray, X_zero: np.ndarray, y: np.ndarray) -> float:
-    """Objective function to find a good initial ``g`` aproximation.
-
-    Parameters
-    ----------
-        g: Initial value for g.
-        X_zero: Initial value for ``X_zero``.
-        y: Observations of the time series to be forecasted.
-
-    Returns
-    -------
-        Objective function to minimize the negative loglikelihood of ``g`` conditioned on a fixed
-        ``X_zero``.
-    """
-    return _log_mle_gen_var(X_zero, g, y)
-
-
 def _objective(flat_params: np.ndarray, shapes: tuple[int], y: np.ndarray) -> float:
     """Objective function to be optimized by the local level and local trend models.
 
