@@ -15,12 +15,12 @@ import logging
 from abc import ABC
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from typing import Callable, Optional, Union
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
-from scipy import linalg, optimize, stats
-from scipy.optimize import Bounds, LinearConstraint
+from scipy import optimize, stats
+from scipy.optimize import Bounds
 from typing_extensions import Self
 
 INITIAL_ALPHA = 0.1
@@ -28,6 +28,8 @@ INITIAL_BETA = 0.01
 
 ALPHA_BOUNDS = (0.0, 2.0)
 BETA_BOUNDS = (0.0, 4.0)
+
+JITTER = 1e-8
 
 
 class FreqInferenceError(Exception):
@@ -168,29 +170,6 @@ class LocalTrendParams(Params):
         """
         lower, upper = zip(*([(-np.inf, np.inf)] * self.X_zero.size + [ALPHA_BOUNDS, BETA_BOUNDS]))
         return Bounds(lower, upper)
-
-    @property
-    def constraints(self) -> list[LinearConstraint]:
-        r"""Get the linear constraints for the parameters of the local trend model.
-
-        Returns
-        -------
-            Linear constraints for the parameters of the local trend model.
-
-        Notes
-        -----
-        In the local trend model, `g` can be decomposed into :math:`\alpha` and :math:`\beta`
-        parameters, which must be greater than or equal to zero and satisfy the following
-        linear constraint:
-
-        .. math::
-
-            2 \alpha + \beta \le 4
-
-        """
-        constraint_matrix = linalg.block_diag(np.eye(self.X_zero.size), np.array([[2, 1], [0, 1]]))
-        ub = np.array([np.inf] * self.X_zero.size + [4.0] + [np.inf])
-        return [LinearConstraint(constraint_matrix, ub=ub)]
 
 
 class LocalLevelForecaster:
@@ -485,16 +464,7 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
     -------
         Optimized parameters for the observed data.
     """
-    initial_X_zero = _initialize_X_zero(y, False)  # noqa: FBT003,N806
-    initial_g = _find_initial_g(
-        _objective_initial_g,
-        (ALPHA_BOUNDS, BETA_BOUNDS),
-        initial_X_zero,
-        y,
-        num=50,
-    )
-
-    initial_params = LocalTrendParams(initial_X_zero, initial_g)
+    initial_params = LocalTrendParams.init(y)
     flat_params, shapes = _flatten_params(initial_params)
 
     opt_res = optimize.minimize(
@@ -512,49 +482,6 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
     opt_params = _unflatten_params(opt_res.x, shapes)
 
     return LocalTrendParams(*opt_params)
-
-
-def _find_initial_g(
-    objective: Callable[..., float],
-    bounds: Sequence[tuple[float, float]],
-    initial_X_zero: np.ndarray,  # noqa: N803
-    y: np.ndarray,
-    num: int = 50,
-) -> np.ndarray:
-    """Find an initial value for ``g`` in the local trend model.
-
-    An optimization by brute force is computed along a grid of values, given a fixed X_zero and the
-    time series observations.
-
-    Parameters
-    ----------
-        objective: Objective function to be minimized.
-        bounds: Bounds for alpha and beta.
-        initial_X_zero: Initial values for X_zero.
-        y: Observed time series.
-
-    Returns
-    -------
-        Initial ``g``.
-    """
-    alphas, betas = map(
-        np.ravel,
-        np.meshgrid(*[np.linspace(lower, upper, num) for lower, upper in bounds]),
-    )
-
-    best_score = np.inf
-    best_val = np.array([[INITIAL_ALPHA], [INITIAL_BETA]])
-    for alpha, beta in zip(alphas, betas):
-        if 2 * alpha + beta > 4:  # noqa: PLR2004
-            continue
-
-        current_val = np.array([[alpha], [beta]])
-        current_score = objective(current_val, initial_X_zero, y)
-        if current_score < best_score:
-            best_score = current_score
-            best_val = current_val
-
-    return best_val
 
 
 def _initialize_X_zero(y: np.ndarray, no_trend: bool) -> np.ndarray:  # noqa: FBT001, N802
@@ -665,13 +592,15 @@ def _log_mle_gen_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
         Logarithm of the maximum likelihood estimator for the generalized variance.
     """
     n = len(y)
+    r = y.shape[1]
+
     _, _, errors = _forward(X_zero, g, y)
 
     if np.isnan(y).any():
         gen_var_log = _adj_log_mle_gen_var(y, errors)
     else:
         _, gen_var_log = np.linalg.slogdet(
-            np.matmul(errors.T, errors) / n,
+            np.matmul(errors.T, errors) / n + np.identity(r) * JITTER,
         )
     return gen_var_log
 
@@ -699,6 +628,7 @@ def _adj_log_mle_gen_var(y: np.ndarray, errors: np.ndarray) -> float:
     for y_t in y:
         selection = _compute_selection_matrix(y_t)
         adjusted_covar = selection @ covar @ selection.T
+        adjusted_covar += np.identity(len(adjusted_covar)) * JITTER
         _, gen_var_log_t = np.linalg.slogdet(adjusted_covar)
         adj_gen_var += gen_var_log_t
 
