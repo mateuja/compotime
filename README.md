@@ -10,12 +10,16 @@ This example uses adapted data on the global [share of energy consumption by sou
 ```python
 import pandas as pd
 
-from compotime import LocalTrendForecaster
+from compotime import LocalTrendForecaster, preprocess
 
-URL = "https://github.com/mateuja/compotime/blob/main/examples/data/share_energy_source.csv"
+URL = "https://raw.githubusercontent.com/mateuja/compotime/main/examples/data/share_energy_source.csv"
 
 date_parser = lambda x: pd.Period(x, "Y")
-time_series = pd.read_csv(URL, parse_dates=["Year"], date_parser=date_parser).set_index("Year")
+time_series = (
+  pd.read_csv(URL, parse_dates=["Year"], date_parser=date_parser)
+  .set_index("Year")
+  .pipe(preprocess.treat_small, 0.001)
+)
 
 model = LocalTrendForecaster()
 model.fit(time_series)
