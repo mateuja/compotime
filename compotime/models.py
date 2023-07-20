@@ -9,6 +9,9 @@ References
 .. [*] Snyder, R.D. et al. 2017
     Forecasting compositional time series: A state space approach
     International Journal of Forecasting.
+
+.. [*] Olive, D. 2023
+    Prediction and Statistical Learning.
 """
 import abc
 import logging
@@ -19,8 +22,8 @@ from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
-from scipy import optimize, stats
-from scipy.optimize import Bounds
+from scipy import linalg, optimize, stats
+from scipy.optimize import Bounds, LinearConstraint
 from typing_extensions import Self
 
 INITIAL_ALPHA = 0.1
@@ -29,7 +32,7 @@ INITIAL_BETA = 0.01
 ALPHA_BOUNDS = (0.0, 2.0)
 BETA_BOUNDS = (0.0, 4.0)
 
-JITTER = 1e-8
+CONDITION_NUMBER = 50
 
 
 class FreqInferenceError(Exception):
@@ -155,21 +158,25 @@ class LocalTrendParams(Params):
         return cls(X_zero, g)
 
     @property
-    def bounds(self) -> Bounds:
-        r"""Get the bounds for the parameters of the local trend model.
+    def constraints(self) -> list[LinearConstraint]:
+        r"""Get the linear constraints for the parameters of the local trend model.
 
         Returns
         -------
-            Bounds for the parameters of the local level model.
-
+            Linear constraints for the parameters of the local trend model.
 
         Notes
         -----
         In the local trend model, `g` can be decomposed into :math:`\alpha` and :math:`\beta`
-        parameters, which must be greater than or equal to zero.
+        parameters, which must be greater than or equal to zero and satisfy the following
+        linear constraint:
+        .. math::
+            2 \alpha + \beta \le 4.
         """
-        lower, upper = zip(*([(-np.inf, np.inf)] * self.X_zero.size + [ALPHA_BOUNDS, BETA_BOUNDS]))
-        return Bounds(lower, upper)
+        constraint_matrix = linalg.block_diag(np.eye(self.X_zero.size), np.array([[2, 1], [0, 1]]))
+        lb = np.array([-1e12] * self.X_zero.size + [0.0] * 2)
+        ub = np.array([1e12] * self.X_zero.size + [4.0] * 2)
+        return [LinearConstraint(constraint_matrix, lb=lb, ub=ub)]
 
 
 class LocalLevelForecaster:
@@ -440,9 +447,7 @@ def _fit_local_level(y: np.ndarray) -> LocalLevelParams:
         _objective,
         flat_params,
         (shapes, y),
-        method="Nelder-Mead",
         bounds=initial_params.bounds,
-        options={"maxfev": flat_params.size * 1000},
     )
 
     if not opt_res.success:
@@ -471,9 +476,8 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
         _objective,
         flat_params,
         (shapes, y),
-        method="Nelder-Mead",
-        bounds=initial_params.bounds,
-        options={"maxfev": flat_params.size * 1000},
+        constraints=initial_params.constraints,
+        options={"maxiter": 200},
     )
 
     if not opt_res.success:
@@ -575,7 +579,6 @@ def _log_mle_gen_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
         Logarithm of the maximum likelihood estimator for the generalized variance.
     """
     n = len(y)
-    r = y.shape[1]
 
     _, _, errors = _forward(X_zero, g, y)
 
@@ -583,7 +586,7 @@ def _log_mle_gen_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
         gen_var_log = _adj_log_mle_gen_var(y, errors)
     else:
         _, gen_var_log = np.linalg.slogdet(
-            np.matmul(errors.T, errors) / n + np.identity(r) * JITTER,
+            _regularize(np.matmul(errors.T, errors) / n),
         )
     return gen_var_log
 
@@ -610,12 +613,30 @@ def _adj_log_mle_gen_var(y: np.ndarray, errors: np.ndarray) -> float:
     adj_gen_var = 0
     for y_t in y:
         selection = _compute_selection_matrix(y_t)
-        adjusted_covar = selection @ covar @ selection.T
-        adjusted_covar += np.identity(len(adjusted_covar)) * JITTER
+        adjusted_covar = _regularize(selection @ covar @ selection.T)
         _, gen_var_log_t = np.linalg.slogdet(adjusted_covar)
         adj_gen_var += gen_var_log_t
 
     return adj_gen_var
+
+
+def _regularize(covar: np.ndarray) -> np.ndarray:
+    """Regularize the covariance matrix.
+
+    Add a delta parameter to the diagonal of the covariance matrix to ensure that it is
+    non-singular and well conditioned.
+
+    Parameters
+    ----------
+        covar: Covariance matrix.
+
+    Returns
+    -------
+        Regularized covariance matrix.
+    """
+    eigenvals = np.linalg.eigvals(covar)
+    delta = max(0, (max(eigenvals) - CONDITION_NUMBER * min(eigenvals)) / (CONDITION_NUMBER - 1))
+    return covar + np.diag(np.repeat(delta, len(covar)))
 
 
 def _compute_selection_matrix(y_t: np.ndarray) -> np.ndarray:
