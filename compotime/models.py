@@ -557,10 +557,6 @@ def _objective(flat_params: np.ndarray, shapes: tuple[int], y: np.ndarray) -> fl
         Objective function to minimize the negative loglikelihood of the given parameters.
     """
     X_zero, g = _unflatten_params(flat_params, shapes)
-
-    if g.size == 2 and g[0] * 2 + g[1] > 4:  # noqa: PLR2004
-        return np.inf
-
     return _log_mle_gen_var(X_zero, g, y)
 
 
