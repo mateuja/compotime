@@ -217,6 +217,7 @@ class LocalLevelForecaster:
     colnames_: pd.Index
     time_idx_: pd.Index
     idx_freq_: Optional[str]
+    base_col_idx_: int
 
     def fit(self, y: pd.DataFrame) -> Self:
         """Fit the model.
@@ -234,7 +235,7 @@ class LocalLevelForecaster:
         self.time_idx_ = y.index
         self.idx_freq_ = _get_idx_freq(self.time_idx_)
 
-        log_y = _log_ratio(y.values)
+        log_y, self.base_col_idx_ = _log_ratio(y.values)
 
         self.optim_params_ = _fit_local_level(log_y)
         self.X_, fitted_curve, _ = _forward(
@@ -243,7 +244,11 @@ class LocalLevelForecaster:
             log_y,
         )
 
-        self.fitted_curve_ = pd.DataFrame(_inv_log_ratio(fitted_curve), y.index, y.columns)
+        self.fitted_curve_ = pd.DataFrame(
+            _inv_log_ratio(fitted_curve, self.base_col_idx_),
+            y.index,
+            y.columns,
+        )
 
         return self
 
@@ -259,7 +264,7 @@ class LocalLevelForecaster:
             Predicted time series.
         """
         return pd.DataFrame(
-            _inv_log_ratio(np.tile(self.X_[-1], (horizon, 1))),
+            _inv_log_ratio(np.tile(self.X_[-1], (horizon, 1)), self.base_col_idx_),
             _get_preds_idx(horizon, self.time_idx_, self.idx_freq_),
             self.colnames_,
         )
@@ -306,6 +311,7 @@ class LocalTrendForecaster:
     colnames_: pd.Index
     time_idx_: pd.Index
     idx_freq_: Optional[str]
+    base_col_idx_: int
 
     def fit(self, y: pd.DataFrame) -> Self:
         """Fit the model.
@@ -323,13 +329,17 @@ class LocalTrendForecaster:
         self.time_idx_ = y.index
         self.idx_freq_ = _get_idx_freq(self.time_idx_)
 
-        log_y = _log_ratio(y.values)
+        log_y, self.base_col_idx_ = _log_ratio(y.values)
 
         self.optim_params_ = _fit_local_trend(log_y)
 
         self.X_, fitted_curve, _ = _forward(self.optim_params_.X_zero, self.optim_params_.g, log_y)
 
-        self.fitted_curve_ = pd.DataFrame(_inv_log_ratio(fitted_curve), y.index, y.columns)
+        self.fitted_curve_ = pd.DataFrame(
+            _inv_log_ratio(fitted_curve, self.base_col_idx_),
+            y.index,
+            y.columns,
+        )
 
         return self
 
@@ -345,13 +355,13 @@ class LocalTrendForecaster:
             Predicted time series.
         """
         return pd.DataFrame(
-            _inv_log_ratio(_predict_local_trend(horizon, self.X_[-1])),
+            _inv_log_ratio(_predict_local_trend(horizon, self.X_[-1]), self.base_col_idx_),
             _get_preds_idx(horizon, self.time_idx_, self.idx_freq_),
             self.colnames_,
         )
 
 
-def _log_ratio(array: np.ndarray) -> np.ndarray:
+def _log_ratio(array: np.ndarray) -> tuple[np.ndarray, int]:
     """Apply log ratio transform to the given time series.
 
     Parameters
@@ -362,19 +372,28 @@ def _log_ratio(array: np.ndarray) -> np.ndarray:
 
     Returns
     -------
-    Unbounded time series.
+    Unbounded time series and index of the base column in the original array.
     """
-    return np.log(array[:, 1:] / array[:, :1])
+    not_nan_cols = np.flatnonzero(~np.isnan(array).any(axis=0))
+    if not_nan_cols.size == 0:
+        msg = (
+            "It is not possible to compute the log-ratio transform. At least one column should "
+            "not contain any missing values."
+        )
+        raise ValueError(msg)
+
+    base_col = not_nan_cols[0]
+    return np.log(np.delete(array, base_col, 1) / array[:, [base_col]]), base_col
 
 
-def _inv_log_ratio(array: np.ndarray) -> np.ndarray:
+def _inv_log_ratio(array: np.ndarray, base_col_idx: int) -> np.ndarray:
     """Apply the inverse function of the log ratio transform to the given time series.
 
     Parameters
     ----------
         array: Multivariate time series array, where the rows represent the different time steps and
             the columns represent each of the individual series.
-
+        base_col_idx: Base column index.
 
     Returns
     -------
@@ -382,7 +401,7 @@ def _inv_log_ratio(array: np.ndarray) -> np.ndarray:
     """
     divisor = 1 + np.exp(array).sum(axis=1)
     array = np.exp(array) / divisor[:, None]
-    return np.insert(array, 0, 1 - array.sum(axis=1), axis=1)
+    return np.insert(array, base_col_idx, 1 - array.sum(axis=1), axis=1)
 
 
 def _flatten_params(params: Params) -> tuple[np.ndarray, tuple[int]]:
