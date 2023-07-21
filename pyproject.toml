@@ -16,7 +16,7 @@ typing-extensions = "^4.6.3"
 black = {extras = ["jupyter"], version = "^23.7.0"}
 ruff = "^0.0.278"
 pytest = "^7.4.0"
-hypothesis = "^6.81.2"
+hypothesis = "^6.82.0"
 ipython = "^8.14.0"
 jupyterlab = "^4.0.1"
 matplotlib = "^3.7.1"
