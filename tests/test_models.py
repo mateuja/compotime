@@ -36,7 +36,7 @@ def test_local_level_forecaster_should_predict_constant_values(time_series: pd.D
         ),
     ),
 )
-@settings(max_examples=5, deadline=datetime.timedelta(seconds=30))
+@settings(max_examples=10, deadline=datetime.timedelta(seconds=30))
 @given(data=st.data())
 def test_models_should_work_with_different_types_of_indexes(
     model: Union[type[LocalLevelForecaster], type[LocalTrendForecaster]],
@@ -68,4 +68,17 @@ def test_inv_log_ratio_is_inverse_of_log_ratio(array: np.ndarray):
     This condition should hold as long as the sum of the time series at a given timestamp always
     equals one.
     """
-    assert np.allclose(array, models._inv_log_ratio(models._log_ratio(array)))
+    transformed_array, base_col_idx = models._log_ratio(array)
+    assert np.allclose(array, models._inv_log_ratio(transformed_array, base_col_idx))
+
+
+@given(compositional_ts_array())
+def test_log_ratio_raises_value_error_when_all_columns_have_nan(array: np.ndarray):
+    """Test that ``_log_ratio`` raises a ``ValueError`` when all columns in the array have nans."""
+    array[0, :] = np.nan
+    error_msg = (
+        "It is not possible to compute the log-ratio transform. At least one column should not"
+        " contain any missing values."
+    )
+    with pytest.raises(ValueError, match=error_msg):
+        models._log_ratio(array)

@@ -1,21 +1,25 @@
 # compotime
 
-compotime is a library for forecasting compositional time series in Python. At the moment, it provides an implementation of the models described in the paper ["Forecasting compositional time series: A state space approach"](https://isidl.com/wp-content/uploads/2017/06/E4001-ISIDL.pdf) (Snyder, R.D. et al, 2017). It is constantly tested to be compatible with the most recent versions of the major machine learning and statistics libraries within the Python ecosystem.
+compotime is a library for forecasting compositional time series in Python. At the moment, it provides an implementation of the models described in the paper ["Forecasting compositional time series: A state space approach"](https://isidl.com/wp-content/uploads/2017/06/E4001-ISIDL.pdf) (Snyder, R.D. et al, 2017). It is constantly tested to be compatible with the major machine learning and statistics libraries within the Python ecosystem.
 
 
 ## Basic usage
 
-This example uses adapted data from the evolution of
-[disease burden by risk factor in the US (1990-2019)](https://ourworldindata.org/grapher/disease-burden-by-risk-factor?time=earliest..latest&country=~USA).
+This example uses adapted data on the global [share of energy consumption by source (1965-2021)](https://ourworldindata.org/grapher/share-energy-source-sub).
 
 ```python
 import pandas as pd
 
-from compotime import LocalTrendForecaster
+from compotime import LocalTrendForecaster, preprocess
 
-URL = "https://raw.githubusercontent.com/mateuja/compotime/feature/configure_docs/examples/data/dbrf.csv"
+URL = "https://raw.githubusercontent.com/mateuja/compotime/main/examples/data/share_energy_source.csv"
 
-time_series = pd.read_csv(URL, parse_dates=["Year"], index_col="Year")
+date_parser = lambda x: pd.Period(x, "Y")
+time_series = (
+  pd.read_csv(URL, parse_dates=["Year"], date_parser=date_parser)
+  .set_index("Year")
+  .pipe(preprocess.treat_small, 0.001)
+)
 
 model = LocalTrendForecaster()
 model.fit(time_series)
