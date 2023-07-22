@@ -22,4 +22,3 @@ jobs:
           poetry build
       - name: Publish distribution to PyPI
           poetry publish -p ${{ secrets.PYPI_TOKEN }}
-
