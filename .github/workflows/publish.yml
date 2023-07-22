@@ -1,6 +1,8 @@
 name: Build Python distribution and publish to PyPI
 
-on: push
+on:
+  release:
+    types: [published]
 
 jobs:
   build_and_publish:
@@ -18,9 +20,6 @@ jobs:
       - name: Build
         run: |
           poetry build
-      - name: Publish distribution to Test PyPI
-        run: |
-          poetry config repositories.test-pypi https://test.pypi.org/legacy/
-          poetry config pypi-token.test-pypi ${{ secrets.TEST_PYPI_TOKEN }}
-          poetry publish -r test-pypi -p ${{ secrets.TEST_PYPI_TOKEN }}
+      - name: Publish distribution to PyPI
+          poetry publish -p ${{ secrets.PYPI_TOKEN }}
 
