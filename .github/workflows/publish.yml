@@ -21,4 +21,5 @@ jobs:
         run: |
           poetry build
       - name: Publish distribution to PyPI
+        run: |
           poetry publish -p ${{ secrets.PYPI_TOKEN }}
