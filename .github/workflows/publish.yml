@@ -19,11 +19,8 @@ jobs:
         run: |
           poetry build
       - name: Publish distribution to Test PyPI
-        env:
-          REPOSITORY: https://test.pypi.org/legacy/
-          TOKEN: ${{ secrets.TEST_PYPI_TOKEN }}
         run: |
-          poetry config repositories.testpypi ${RESPOSITORY}
-          poetry config pypi-token.testpypi ${TOKEN}
-          poetry publish -r ${REPOSITORY} -p ${TOKEN}
+          poetry config repositories.test-pypi https://test.pypi.org/legacy/
+          poetry config pypi-token.test-pypi ${{ secrets.TEST_PYPI_TOKEN }}
+          poetry publish -r test-pypi -p ${{ secrets.TEST_PYPI_TOKEN }}
 
