@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "compotime"
 version = "0.1.0"
-description = "A package for compositional time series"
+description = "A library for forecasting compositional time series"
 authors = ["Jaume Mateu"]
 readme = "README.md"
 
