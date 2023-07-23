@@ -1,5 +1,7 @@
 # compotime
 
+![Build](https://github.com/mateuja/compotime/actions/workflows/build.yml/badge.svg?branch=main)
+
 compotime is a library for forecasting compositional time series in Python. At the moment, it provides an implementation of the models described in the paper ["Forecasting compositional time series: A state space approach"](https://isidl.com/wp-content/uploads/2017/06/E4001-ISIDL.pdf) (Snyder, R.D. et al, 2017). It is constantly tested to be compatible with the major machine learning and statistics libraries within the Python ecosystem.
 
 ## Quick install
