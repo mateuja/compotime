@@ -28,8 +28,7 @@ time_series = (
   .pipe(preprocess.treat_small, 0.001)
 )
 
-model = LocalTrendForecaster()
-model.fit(time_series)
+model = LocalTrendForecaster().fit(time_series)
 model.predict(horizon=10)
 ```
 
