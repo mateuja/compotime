@@ -2,6 +2,13 @@
 
 compotime is a library for forecasting compositional time series in Python. At the moment, it provides an implementation of the models described in the paper ["Forecasting compositional time series: A state space approach"](https://isidl.com/wp-content/uploads/2017/06/E4001-ISIDL.pdf) (Snyder, R.D. et al, 2017). It is constantly tested to be compatible with the major machine learning and statistics libraries within the Python ecosystem.
 
+## Quick install
+
+compotime is currently available for python 3.9, 3.10 and 3.11. It can be installed from PyPI:
+
+```bash
+pip install compotime
+```
 
 ## Basic usage
 
@@ -21,8 +28,7 @@ time_series = (
   .pipe(preprocess.treat_small, 0.001)
 )
 
-model = LocalTrendForecaster()
-model.fit(time_series)
+model = LocalTrendForecaster().fit(time_series)
 model.predict(horizon=10)
 ```
 
