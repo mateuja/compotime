@@ -5,7 +5,7 @@ DOCS_DIR=./docs
 .PHONY: tests lint jupyter format docs
 
 tests:
-	pytest -n auto $(TEST_DIR)
+	pytest --cov=$(PACKAGE) --cov-report=xml -n auto
 
 lint:
 	ruff compotime tests
