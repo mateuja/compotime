@@ -31,7 +31,7 @@ def test_local_level_forecaster_should_predict_constant_values(time_series: pd.D
     list(
         itertools.product(
             [LocalLevelForecaster, LocalTrendForecaster],
-            [pd.DatetimeIndex, pd.PeriodIndex, pd.RangeIndex],
+            [pd.DatetimeIndex, pd.PeriodIndex, pd.RangeIndex, pd.Index],
             [(12, 3), (15, 2), (10, 5)],
         ),
     ),
