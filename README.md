@@ -23,7 +23,7 @@ from compotime import LocalTrendForecaster, preprocess
 
 URL = "https://raw.githubusercontent.com/mateuja/compotime/main/examples/data/share_energy_source.csv"
 
-time_series = pd.read_csv(URL).set_index("Year").pipe(preprocess.treat_small, 1e-8)
+time_series = pd.read_csv(URL, index_col="Year").pipe(preprocess.treat_small, 1e-8)
 
 model = LocalTrendForecaster().fit(time_series)
 model.predict(horizon=10)
