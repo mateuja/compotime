@@ -800,7 +800,7 @@ def _validate_idx(idx: pd.Index) -> None:
     --------
         idx: Time series index.
 
-    Return
+    Returns
     ------
     bool
         Whether the time series index is valid or not.
@@ -855,8 +855,9 @@ def _is_equally_spaced(idx: pd.Index) -> bool:
     ----------
         idx: Index of the dataframe.
 
-    Return
+    Returns
     ------
+    bool
         Whether the index is equally spaced or not.
     """
     return len(set(np.diff(idx))) == 1
