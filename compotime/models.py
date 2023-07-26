@@ -260,6 +260,9 @@ class LocalLevelForecaster:
         """
         self.colnames_ = y.columns
         self.time_idx_ = y.index
+
+        _validate_idx(self.time_idx_)
+
         self.idx_freq_ = _get_idx_freq(self.time_idx_)
 
         log_y, self.base_col_idx_ = _log_ratio(y.values)
@@ -358,6 +361,9 @@ class LocalTrendForecaster:
         """
         self.colnames_ = y.columns
         self.time_idx_ = y.index
+
+        _validate_idx(self.time_idx_)
+
         self.idx_freq_ = _get_idx_freq(self.time_idx_)
 
         log_y, self.base_col_idx_ = _log_ratio(y.values)
@@ -407,14 +413,18 @@ def _log_ratio(array: np.ndarray) -> tuple[np.ndarray, int]:
     -------
     tuple[np.ndarray, int]
         Unbounded time series and index of the base column in the original array.
+
+    Raises
+    ------
+    ValueError
+        If there is no column without any missing values.
     """
     not_nan_cols = np.flatnonzero(~np.isnan(array).any(axis=0))
     if not_nan_cols.size == 0:
-        msg = (
+        raise ValueError(
             "It is not possible to compute the log-ratio transform. At least one column should "
-            "not contain any missing values."
+            "not contain any missing values.",
         )
-        raise ValueError(msg)
 
     base_col = not_nan_cols[0]
     return np.log(np.delete(array, base_col, 1) / array[:, [base_col]]), base_col
@@ -783,6 +793,33 @@ def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
     return latent_states, np.vstack(fitted_curve), np.vstack(errors)
 
 
+def _validate_idx(idx: pd.Index) -> None:
+    """Validate that the time series index is valid.
+
+    Parameter
+    --------
+        idx: Time series index.
+
+    Returns
+    -------
+    bool
+        Whether the time series index is valid or not.
+
+    Raises
+    ------
+    ValueError
+        If the index is not valid.
+    """
+    if not isinstance(
+        idx,
+        (pd.PeriodIndex, pd.DatetimeIndex, pd.RangeIndex),
+    ) and not _is_equally_spaced(idx):
+        raise ValueError(
+            "The index should either be a PeriodIndex, DatetimeIndex, RangeIndex or have equally "
+            "spaced values",
+        )
+
+
 def _get_idx_freq(idx: Union[pd.DatetimeIndex, pd.PeriodIndex, pd.RangeIndex]) -> Optional[str]:
     """Get the frequency of the index, if it has any.
 
@@ -805,11 +842,26 @@ def _get_idx_freq(idx: Union[pd.DatetimeIndex, pd.PeriodIndex, pd.RangeIndex]) -
     if isinstance(idx, (pd.PeriodIndex, pd.DatetimeIndex)):
         idx_freq = idx.freq if idx.freq else pd.infer_freq(idx)
         if idx_freq is None:
-            msg = "Cannot infer the frequency of the given time series"
-            raise FreqInferenceError(msg)
+            raise FreqInferenceError("Cannot infer the frequency of the given time series")
     else:
         idx_freq = None
+
     return idx_freq
+
+
+def _is_equally_spaced(idx: pd.Index) -> bool:
+    """Check if all the values in a pandas index are equally spaced.
+
+    Parameters
+    ----------
+        idx: Index of the dataframe.
+
+    Returns
+    -------
+    bool
+        Whether the index is equally spaced or not.
+    """
+    return len(set(np.diff(idx))) == 1
 
 
 def _get_preds_idx(
@@ -843,12 +895,16 @@ def _get_preds_idx(
             freq=freq,
         )
 
-    else:
+    elif isinstance(time_idx, pd.DatetimeIndex):
         preds_idx = pd.date_range(
             time_idx.max() + pd.tseries.frequencies.to_offset(freq),
             periods=horizon,
             freq=freq,
         )
+
+    else:
+        step_size = np.diff(time_idx)[0]
+        preds_idx = pd.Index([time_idx.max() + step_size * i for i in range(1, horizon + 1)])
 
     preds_idx.name = time_idx.name
 

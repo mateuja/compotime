@@ -54,7 +54,7 @@ def compositional_ts(
     elif index_type == pd.RangeIndex:
         ts_index = pd.RangeIndex.from_range(range(len(array)))
     else:
-        raise NotImplementedError
+        ts_index = pd.Index(list(range(len(array))))
 
     ts_index.name = "date"
 

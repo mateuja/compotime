@@ -37,11 +37,11 @@ sphinx = "^7.0.1"
 line-length = 100
 select = [
     "F", "E", "W", "I", "N", "D", "UP", "YTT", "ANN", "S", "BLE", "FBT", "B", "A", "COM", 
-    "C4", "DTZ", "EM", "EXE", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE",
+    "C4", "DTZ", "EXE", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE",
     "RET", "SLF", "SIM", "TID", "TCH", "INT", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "NPY",
     "RUF"
 ]
-ignore = ["ANN101", "ANN102", "S101", "D203", "D213"]
+ignore = ["ANN101", "ANN102", "S101", "D203", "D213", "TRY003"]
 cache-dir = ".ruff_cache"
 target-version = "py39"
 
