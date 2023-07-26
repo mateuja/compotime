@@ -41,9 +41,6 @@ class FreqInferenceError(Exception):
 class Params(ABC):
     """Parameters abstract class."""
 
-    X_zero: np.ndarray
-    g: np.ndarray
-
     @classmethod
     @abc.abstractmethod
     def init(cls, time_series: np.ndarray) -> Self:
@@ -51,10 +48,12 @@ class Params(ABC):
 
         Parameters
         ----------
-            time_series: Observed time series.
+        time_series
+            Observed time series.
 
         Returns
         -------
+        Self
             Initialized parameters.
         """
 
@@ -63,7 +62,8 @@ class Params(ABC):
 
         Yields
         ------
-            parameter.
+        Iterator[np.ndarray]
+            Parameter.
         """
         yield from vars(self).values()
 
@@ -72,16 +72,25 @@ class Params(ABC):
 class LocalLevelParams(Params):
     """Parameters for the local level model.
 
-    Parameters
-    ----------
-        X_zero: Seed state matrix.
-        g: Persistence vector.
-
     Notes
     -----
     The seed state matrix (`X_zero`) repesents the value for the transition equation that describes
     how the state vectors evolve over time. The persistence vector (`g`) determines the extend of
     the innovation on the state. These are the only parameters that need to be estimated.
+
+    Parameters
+    ----------
+    X_zero
+        Seed state matrix.
+    g
+        Persistence vector.
+
+    Attributes
+    ----------
+    X_zero
+        Seed state matrix.
+    g
+        Persistence vector.
     """
 
     X_zero: np.ndarray
@@ -93,10 +102,12 @@ class LocalLevelParams(Params):
 
         Parameters
         ----------
-            time_series: Observed time series.
+        time_series
+            Observed time series.
 
         Returns
         -------
+        Self
             Initialized parameters.
         """
         X_zero = _initialize_X_zero(time_series, no_trend=True)
@@ -107,14 +118,15 @@ class LocalLevelParams(Params):
     def bounds(self) -> Bounds:
         """Get the bounds for the parameters of the local level model.
 
-        Returns
-        -------
-            Bounds for the parameters of the local level model.
-
         Notes
         -----
         In the local level model, `g` values must be within the range between 0 and 2, both
         included.
+
+        Returns
+        -------
+        Bounds
+            Bounds for the parameters of the local level model.
         """
         lower, upper = zip(*([(-np.inf, np.inf)] * self.X_zero.size + [ALPHA_BOUNDS]))
         return Bounds(lower, upper)
@@ -124,32 +136,42 @@ class LocalLevelParams(Params):
 class LocalTrendParams(Params):
     """Parameters for the local level model.
 
-    Parameters
-    ----------
-        X_zero: Seed state matrix.
-        g: Persistence vector.
-
     Notes
     -----
     The seed state matrix (`X_zero`) repesents the value for the transition equation that describes
     how the state vectors evolve over time. The persistence vector (`g`) determines the extend of
     the innovation on the state. These are the only parameters that need to be estimated.
+
+    Parameters
+    ----------
+    X_zero
+        Seed state matrix.
+    g
+        Persistence vector.
+
+    Attributes
+    ----------
+    X_zero
+        Seed state matrix.
+    g
+        Persistence vector.
     """
 
     X_zero: np.ndarray
     g: np.ndarray
 
     @classmethod
-    def init(cls, time_series: np.ndarray) -> None:
+    def init(cls, time_series: np.ndarray) -> Self:
         """Initialize parameters.
 
         Parameters
         ----------
-            time_series: Observed time series.
-            rng: Random number generator.
+        time_series
+            Observed time series.
 
         Returns
         -------
+        Self
             Initialized parameters.
         """
         X_zero = _initialize_X_zero(time_series, no_trend=False)
@@ -160,17 +182,20 @@ class LocalTrendParams(Params):
     def constraints(self) -> list[LinearConstraint]:
         r"""Get the linear constraints for the parameters of the local trend model.
 
-        Returns
-        -------
-            Linear constraints for the parameters of the local trend model.
-
         Notes
         -----
         In the local trend model, `g` can be decomposed into :math:`\alpha` and :math:`\beta`
         parameters, which must be greater than or equal to zero and satisfy the following
         linear constraint:
+
         .. math::
             2 \alpha + \beta \le 4.
+
+        Returns
+        -------
+        list[LinearConstraint]
+            Linear constraints for the parameters of the local trend model.
+
         """
         constraint_matrix = linalg.block_diag(np.eye(self.X_zero.size), np.array([[2, 1], [0, 1]]))
         lb = np.array([-1e12] * self.X_zero.size + [0.0] * 2)
@@ -224,11 +249,13 @@ class LocalLevelForecaster:
 
         Parameters
         ----------
-            y: Time series dataframe, where rows represent the timestamps and columns the
-                different shares series.
+        y
+            Time series dataframe, where rows represent the timestamps and columns the different
+            shares series.
 
         Returns
         -------
+        Self
             Fitted instance of the model.
         """
         self.colnames_ = y.columns
@@ -257,10 +284,12 @@ class LocalLevelForecaster:
 
         Parameters
         ----------
-            horizon: Number of steps into the future to be predicted.
+        horizon
+            Number of steps into the future to be predicted.
 
         Returns
         -------
+        pd.DataFrame
             Predicted time series.
         """
         return pd.DataFrame(
@@ -318,11 +347,13 @@ class LocalTrendForecaster:
 
         Parameters
         ----------
-            y: Time series dataframe, where rows represent the timestamps and columns the
-                different shares series.
+        y
+            Time series dataframe, where rows represent the timestamps and columns the different
+            shares series.
 
         Returns
         -------
+        Self
             Fitted instance of the model.
         """
         self.colnames_ = y.columns
@@ -348,10 +379,12 @@ class LocalTrendForecaster:
 
         Parameters
         ----------
-            horizon: Number of steps into the future to be predicted.
+        horizon
+            Number of steps into the future to be predicted.
 
         Returns
         -------
+        pd.DataFrame
             Predicted time series.
         """
         return pd.DataFrame(
@@ -366,13 +399,14 @@ def _log_ratio(array: np.ndarray) -> tuple[np.ndarray, int]:
 
     Parameters
     ----------
-    array: Multivariate time series array, where the rows represent the different time steps and
-        the columns represent each of the individual series.
-
+    array
+        Multivariate time series array, where the rows represent the different time steps and the
+        columns represent each of the individual series.
 
     Returns
     -------
-    Unbounded time series and index of the base column in the original array.
+    tuple[np.ndarray, int]
+        Unbounded time series and index of the base column in the original array.
     """
     not_nan_cols = np.flatnonzero(~np.isnan(array).any(axis=0))
     if not_nan_cols.size == 0:
@@ -391,12 +425,15 @@ def _inv_log_ratio(array: np.ndarray, base_col_idx: int) -> np.ndarray:
 
     Parameters
     ----------
-        array: Multivariate time series array, where the rows represent the different time steps and
-            the columns represent each of the individual series.
-        base_col_idx: Base column index.
+    array
+        Multivariate time series array, where the rows represent the different time steps and
+        the columns represent each of the individual series.
+    base_col_idx
+        Base column index.
 
     Returns
     -------
+    np.ndarray
         Time series that add up to zero at each time subscript t.
     """
     divisor = 1 + np.exp(array).sum(axis=1)
@@ -409,10 +446,12 @@ def _flatten_params(params: Params) -> tuple[np.ndarray, tuple[int]]:
 
     Parameters
     ----------
-        params: Parameters.
+    params
+        Parameters.
 
     Returns
     -------
+    tuple[np.ndarray, tuple[int]]
         Flattened parameters and their original shapes.
     """
     params, shapes = tuple(zip(*((np.ravel(x), x.shape) for x in params)))
@@ -427,12 +466,14 @@ def _unflatten_params(
 
     Parameters
     ----------
-        flat_params: Single unidimensional array with the values for all the parameters.
-        shapes: Shapes that the output parameters should have.
-
+    flat_params
+        Single unidimensional array with the values for all the parameters.
+    shapes
+        Shapes that the output parameters should have.
 
     Returns
     -------
+    tuple[np.ndarray]
         Multiple parameters with various shapes.
     """
     cutoffs = np.cumsum([np.prod(shape) for shape in shapes], dtype=int)
@@ -452,10 +493,12 @@ def _fit_local_level(y: np.ndarray) -> LocalLevelParams:
 
     Parameters
     ----------
-        y: Time series data.
+    y
+        Time series data.
 
     Returns
     -------
+    LocalLevelParams
         Optimized parameters for the observed data.
     """
     initial_params = LocalLevelParams.init(y)
@@ -481,10 +524,12 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
 
     Parameters
     ----------
-        y: Time series data.
+    y
+        Time series data.
 
     Returns
     -------
+    LocalTrendParams
         Optimized parameters for the observed data.
     """
     initial_params = LocalTrendParams.init(y)
@@ -515,12 +560,15 @@ def _initialize_X_zero(y: np.ndarray, no_trend: bool) -> np.ndarray:  # noqa: FB
 
     Parameters
     ----------
-        y: Observed time series.
-        no_trend: Whether no trend is required. This should be ``True`` for the
-            ``LocalLevelForecaster``.
+    y
+        Observed time series.
+    no_trend
+        Whether no trend is required. This should be ``True`` for the
+        ``LocalLevelForecaster``.
 
     Returns
     -------
+    np.ndarray
         Initialized seed state matrix.
     """
     regressions = []
@@ -541,12 +589,15 @@ def _predict_local_trend(horizon: int, X_last: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-        horizon: Number of steps to predict into the future.
-        X_last: Value of the lattent state corresponding to the last observed
-            observation in the time series.
+    horizon
+        Number of steps to predict into the future.
+    X_last
+        Value of the lattent state corresponding to the last observed observation in the time
+        series.
 
     Returns
     -------
+    np.ndarray
         Future values for the time series.
     """
     F = np.tri(2).T
@@ -566,13 +617,17 @@ def _objective(flat_params: np.ndarray, shapes: tuple[int], y: np.ndarray) -> fl
 
     Parameters
     ----------
-        flat_params: Initial parameters, flattened in a single one dimensional array.
-        shapes: Shapes of the different parameters, so that each of them can be reconstructed
-            from the ``flat_params``.
-        y: Observations of the time series to be forecasted.
+    flat_params
+        Initial parameters, flattened in a single one dimensional array.
+    shapes
+        Shapes of the different parameters, so that each of them can be reconstructed
+        from the ``flat_params``.
+    y
+        Observations of the time series to be forecasted.
 
     Returns
     -------
+    float
         Objective function to minimize the negative loglikelihood of the given parameters.
     """
     X_zero, g = _unflatten_params(flat_params, shapes)
@@ -584,12 +639,16 @@ def _log_mle_gen_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
 
     Parameters
     ----------
-        X_zero: Seed state matrix.
-        g: Persistence vector.
-        y: Observed time series.
+    X_zero
+        Seed state matrix.
+    g
+        Persistence vector.
+    y
+        Observed time series.
 
     Returns
     -------
+    float
         Logarithm of the maximum likelihood estimator for the generalized variance.
     """
     n = len(y)
@@ -613,11 +672,14 @@ def _adj_log_mle_gen_var(y: np.ndarray, errors: np.ndarray) -> float:
 
     Parameters
     ----------
-        y: Observed time series.
-        errors: Array of errors per timestamp.
+    y
+        Observed time series.
+    errors
+        Array of errors per timestamp.
 
     Returns
     -------
+    float
         Logarithm of the adjusted maximum likelihood estimator for the generalized variance
         for TS with NaN values.
     """
@@ -642,10 +704,12 @@ def _regularize(covar: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-        covar: Covariance matrix.
+    covar
+        Covariance matrix.
 
     Returns
     -------
+    np.ndarray
         Regularized covariance matrix.
     """
     eigenvals = np.linalg.eigvals(covar)
@@ -658,10 +722,12 @@ def _compute_selection_matrix(y_t: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-        y_t: Values of each time series at time t.
+    y_t
+        Values of each time series at time t.
 
     Returns
     -------
+    np.ndarray
         Selection matrix.
     """
     selection = np.zeros((np.count_nonzero(~np.isnan(y_t)), len(y_t)))
@@ -682,12 +748,16 @@ def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
 
     Parameters
     ----------
-        X_zero: Seed state matrix.
-        g: Persistence vector.
-        y: Observed time series.
+    X_zero
+        Seed state matrix.
+    g
+        Persistence vector.
+    y
+        Observed time series.
 
     Returns
     -------
+    tuple
         Latent states, fitted curve and errors for the different time steps.
     """
     n_rows = 1 if X_zero.ndim == 1 else len(X_zero)
@@ -718,16 +788,19 @@ def _get_idx_freq(idx: Union[pd.DatetimeIndex, pd.PeriodIndex, pd.RangeIndex]) -
 
     Parameters
     ----------
-        idx: Index of the time series.
+    idx
+        Index of the time series.
 
     Returns
     -------
+    Optional[str]
         Frequency of the time series.
 
     Raises
     ------
-        ValueError: If the index is a PeriodIndex or DatetimeIndex but the frequency cannot be
-            inferred.
+    ValueError
+        If the index is a PeriodIndex or DatetimeIndex but the frequency cannot be
+        inferred.
     """
     if isinstance(idx, (pd.PeriodIndex, pd.DatetimeIndex)):
         idx_freq = idx.freq if idx.freq else pd.infer_freq(idx)
@@ -748,12 +821,16 @@ def _get_preds_idx(
 
     Parameters
     ----------
-        horizon: Number of steps to be predicted into the future.
-        time_idx: Index of the fitted time series.
-        freq: Frequency of the fitted time series index.
+    horizon
+        Number of steps to be predicted into the future.
+    time_idx
+        Index of the fitted time series.
+    freq
+        Frequency of the fitted time series index.
 
     Returns
     -------
+    pd.Index
         Index of the predictions.
     """
     if isinstance(time_idx, pd.RangeIndex):
