@@ -802,6 +802,7 @@ def _validate_idx(idx: pd.Index) -> None:
 
     Return
     ------
+    bool
         Whether the time series index is valid or not.
 
     Raises
