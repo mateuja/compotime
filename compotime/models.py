@@ -801,13 +801,14 @@ def _validate_idx(idx: pd.Index) -> None:
         idx: Time series index.
 
     Returns
-    ------
+    -------
     bool
         Whether the time series index is valid or not.
 
     Raises
     ------
-        ValueError: If the index is not valid.
+    ValueError
+        If the index is not valid.
     """
     if not isinstance(
         idx,
@@ -856,7 +857,7 @@ def _is_equally_spaced(idx: pd.Index) -> bool:
         idx: Index of the dataframe.
 
     Returns
-    ------
+    -------
     bool
         Whether the index is equally spaced or not.
     """
