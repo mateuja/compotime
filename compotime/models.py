@@ -641,11 +641,11 @@ def _objective(flat_params: np.ndarray, shapes: tuple[int], y: np.ndarray) -> fl
         Objective function to minimize the negative loglikelihood of the given parameters.
     """
     X_zero, g = _unflatten_params(flat_params, shapes)
-    return _log_mle_gen_var(X_zero, g, y)
+    return _neg_log_likelihood(X_zero, g, y)
 
 
-def _log_mle_gen_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
-    """Compute the logarithm of the maximum likelihood estimator for the generalized variance.
+def _neg_log_likelihood(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
+    """Compute the negative log-likelihood loss.
 
     Parameters
     ----------
@@ -659,26 +659,24 @@ def _log_mle_gen_var(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> float:
     Returns
     -------
     float
-        Logarithm of the maximum likelihood estimator for the generalized variance.
+        Negative log-likelihood loss.
     """
     n = len(y)
 
     _, _, errors = _forward(X_zero, g, y)
 
     if np.isnan(y).any():
-        gen_var_log = _adj_log_mle_gen_var(y, errors)
-    else:
-        _, gen_var_log = np.linalg.slogdet(
-            _regularize(np.matmul(errors.T, errors) / n),
-        )
-    return gen_var_log
+        return _adj_neg_log_likelihood(y, errors)
+    return np.linalg.slogdet(
+        _regularize(np.matmul(errors.T, errors) / n),
+    )[1]
 
 
-def _adj_log_mle_gen_var(y: np.ndarray, errors: np.ndarray) -> float:
-    """Compute the logarithm of the adjusted MLE for the generalized variance.
+def _adj_neg_log_likelihood(y: np.ndarray, errors: np.ndarray) -> float:
+    """Compute the negative log-likelihood loss adapted to time series of different lengths.
 
-    Compute the logarithm of the adjusted maximum likelihood estimator for the generalized
-    variance for cases with time series of different lenghts (i.e. containing NaN values).
+    Having different lengths in the time series requires some adaptations when computing the
+    estimated generalized variance.
 
     Parameters
     ----------
@@ -690,8 +688,7 @@ def _adj_log_mle_gen_var(y: np.ndarray, errors: np.ndarray) -> float:
     Returns
     -------
     float
-        Logarithm of the adjusted maximum likelihood estimator for the generalized variance
-        for TS with NaN values.
+        Negative log-likelihood loss adapted to time series of different lengths.
     """
     num_not_nan = (~np.isnan(y)).sum(axis=0)
     covar = (errors.T @ errors) / np.minimum(num_not_nan[:, np.newaxis], num_not_nan)
