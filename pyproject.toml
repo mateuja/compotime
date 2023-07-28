@@ -60,7 +60,6 @@ docstring-quotes = "double"
 "tests/**/*.py" = ["ANN201", "SLF001", "EXE002"]
 "compotime/*.py" = ["EXE002"]
 
-
 [tool.black]
 line-length = 100
 target-version = ["py39"]
