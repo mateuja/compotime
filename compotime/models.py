@@ -26,16 +26,14 @@ from scipy import linalg, optimize, stats
 from scipy.optimize import Bounds, LinearConstraint
 from typing_extensions import Self
 
+from .errors import FreqInferenceError, InvalidIndexError, LogRatioTransformError
+
 INITIAL_ALPHA = 0.1
 INITIAL_BETA = 0.01
 
 ALPHA_BOUNDS = (0.0, 2.0)
 
 CONDITION_NUMBER = 50
-
-
-class FreqInferenceError(Exception):
-    """Error raised when an index frequency cannot be inferred."""
 
 
 class Params(ABC):
@@ -416,14 +414,14 @@ def _log_ratio(array: np.ndarray) -> tuple[np.ndarray, int]:
 
     Raises
     ------
-    ValueError
+    LogRatioTransformError
         If there is no column without any missing values.
     """
     not_nan_cols = np.flatnonzero(~np.isnan(array).any(axis=0))
     if not_nan_cols.size == 0:
-        raise ValueError(
-            "It is not possible to compute the log-ratio transform. At least one column should "
-            "not contain any missing values.",
+        raise LogRatioTransformError(
+            "It is not possible to apply the log-ratio transform on the given time series. At "
+            "least one of them should not contain any missing values.",
         )
 
     base_col = not_nan_cols[0]
@@ -791,7 +789,7 @@ def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
 
 
 def _validate_idx(idx: pd.Index) -> None:
-    """Validate that the time series index is valid.
+    """Validate that the time series index is valid by checking that all values are equally spaced.
 
     Parameter
     --------
@@ -804,17 +802,11 @@ def _validate_idx(idx: pd.Index) -> None:
 
     Raises
     ------
-    ValueError
+    InvalidIndexError
         If the index is not valid.
     """
-    if not isinstance(
-        idx,
-        (pd.PeriodIndex, pd.DatetimeIndex, pd.RangeIndex),
-    ) and not _is_equally_spaced(idx):
-        raise ValueError(
-            "The index should either be a PeriodIndex, DatetimeIndex, RangeIndex or have equally "
-            "spaced values",
-        )
+    if not _is_equally_spaced(idx):
+        raise InvalidIndexError
 
 
 def _get_idx_freq(idx: Union[pd.DatetimeIndex, pd.PeriodIndex, pd.RangeIndex]) -> Optional[str]:
@@ -832,14 +824,18 @@ def _get_idx_freq(idx: Union[pd.DatetimeIndex, pd.PeriodIndex, pd.RangeIndex]) -
 
     Raises
     ------
-    ValueError
+    FreqInferenceError
         If the index is a PeriodIndex or DatetimeIndex but the frequency cannot be
         inferred.
     """
     if isinstance(idx, (pd.PeriodIndex, pd.DatetimeIndex)):
-        idx_freq = idx.freq if idx.freq else pd.infer_freq(idx)
-        if idx_freq is None:
-            raise FreqInferenceError("Cannot infer the frequency of the given time series")
+        if idx.freq:
+            idx_freq = idx.freq
+        else:
+            try:
+                idx_freq = pd.infer_freq(idx)
+            except (ValueError, TypeError) as exc:
+                raise FreqInferenceError from exc
     else:
         idx_freq = None
 
