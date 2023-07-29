@@ -40,13 +40,19 @@
               format = {
                 enable = true;
                 name = "Run formatters";
-                entry = "black . && ruff -s --fix --exit-zero .";
+                entry = let
+                  script = pkgs.writeShellScript "run_formatters.sh" ''
+                    black .
+                    ruff -s --fix --exit-zero .
+                  '';
+                in toString script;
                 types = [ "python" ];
               };
               tests = {
                 enable = true;
                 name = "Run tests";
-                entry = "make tests";
+                entry = "pytest --cov=compotime --cov-report=xml -n auto";
+                types = [ "python" ];
               };
               docs = {
                 enable = true;
