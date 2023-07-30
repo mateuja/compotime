@@ -12,6 +12,7 @@ from hypothesis.extra import numpy as hnp
 from hypothesis.strategies import DataObject
 
 from compotime import LocalLevelForecaster, LocalTrendForecaster, models
+from compotime.errors import FreqInferenceError, InvalidIndexError, LogRatioTransformError
 
 from ._utils import compositional_ts, compositional_ts_array
 
@@ -72,13 +73,43 @@ def test_inv_log_ratio_is_inverse_of_log_ratio(array: np.ndarray):
     assert np.allclose(array, models._inv_log_ratio(transformed_array, base_col_idx))
 
 
-@given(compositional_ts_array())
-def test_log_ratio_raises_value_error_when_all_columns_have_nan(array: np.ndarray):
-    """Test that ``_log_ratio`` raises a ``ValueError`` when all columns in the array have nans."""
-    array[0, :] = np.nan
+@pytest.mark.parametrize("model", [(LocalLevelForecaster), (LocalTrendForecaster)])
+@given(time_series=compositional_ts())
+def test_log_ratio_raises_error_when_all_columns_have_nan(
+    model: Union[type[LocalLevelForecaster], type[LocalTrendForecaster]],
+    time_series: pd.DataFrame,
+):
+    """Test that a ``LogRatioTransformError`` is raised when all time series have nans."""
+    time_series.iloc[0, :] = np.nan
+
     error_msg = (
-        "It is not possible to compute the log-ratio transform. At least one column should not"
-        " contain any missing values."
+        "It is not possible to apply the log-ratio transform on the given time series. At "
+        "least one of them should not contain any missing values."
     )
-    with pytest.raises(ValueError, match=error_msg):
-        models._log_ratio(array)
+    with pytest.raises(LogRatioTransformError, match=error_msg):
+        model().fit(time_series)
+
+
+@pytest.mark.parametrize("model", [(LocalLevelForecaster), (LocalTrendForecaster)])
+def test_freq_inference_error(model: Union[type[LocalLevelForecaster], type[LocalTrendForecaster]]):
+    """Test that a ``FreqInferenceError`` is raised when the index frequency cannot be inferred."""
+    index = pd.DatetimeIndex([pd.to_datetime("2020-01-01"), pd.to_datetime("2020-01-02")])
+    time_series = pd.DataFrame({"t1": [0.5, 0.3], "t2": [0.5, 0.7]}, index)
+
+    error_msg = "Cannot infer the frequency of the given time series"
+    with pytest.raises(FreqInferenceError, match=error_msg):
+        model().fit(time_series)
+
+
+@pytest.mark.parametrize("model", [(LocalLevelForecaster), (LocalTrendForecaster)])
+@given(time_series=compositional_ts(shape=(10, 3)))
+def test_invalid_index_error(
+    model: Union[type[LocalLevelForecaster], type[LocalTrendForecaster]],
+    time_series: pd.DataFrame,
+):
+    """Test that an ``InvalidIndexError`` is raised when the index values are not equally spaced."""
+    time_series = time_series.drop(index=time_series.index[1])
+
+    error_msg = "The index of the time series should have equally spaced values"
+    with pytest.raises(InvalidIndexError, match=error_msg):
+        model().fit(time_series)
