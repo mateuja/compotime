@@ -74,6 +74,28 @@ def test_inv_log_ratio_is_inverse_of_log_ratio(array: np.ndarray):
 
 
 @pytest.mark.parametrize("model", [(LocalLevelForecaster), (LocalTrendForecaster)])
+def test_forecasts_should_be_invariant_to_choice_of_base_ts(
+    model: Union[type[LocalLevelForecaster], type[LocalTrendForecaster]],
+):
+    """Test that the forecasts of the models are invariant to the choice of the base time series."""
+    time_series = pd.DataFrame(
+        {
+            "date": pd.period_range("2020-01", "2020-12", freq="M"),
+            "a": [0.5] * 12,
+            "b": [0.35, 0.36, 0.37, 0.38, 0.39, 0.40, 0.41, 0.42, 0.43, 0.44, 0.45, 0.46],
+            "c": [0.15, 0.14, 0.13, 0.12, 0.11, 0.10, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04],
+        },
+    ).set_index("date")
+
+    forecasts = model().fit(time_series).predict(10)
+    for i in range(1, time_series.shape[1]):
+        colnames = list(time_series.columns)
+        colnames[0], colnames[i] = colnames[i], colnames[0]
+        forecaster = model().fit(time_series[colnames])
+        assert np.allclose(forecasts, forecaster.predict(10)[time_series.columns], atol=1e-2)
+
+
+@pytest.mark.parametrize("model", [(LocalLevelForecaster), (LocalTrendForecaster)])
 @given(time_series=compositional_ts())
 def test_log_ratio_raises_error_when_all_columns_have_nan(
     model: Union[type[LocalLevelForecaster], type[LocalTrendForecaster]],
