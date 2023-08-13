@@ -588,7 +588,7 @@ def _initialize_X_zero(y: np.ndarray, no_trend: bool) -> np.ndarray:  # noqa: FB
             reg = stats.linregress(range(len(col[:10])), col[:10])
             intercepts.append(reg.intercept)
             slopes.append(reg.slope)
-    
+
     if no_trend:
         return np.array(intercepts).reshape(1, -1)
     return np.vstack([intercepts, slopes])
