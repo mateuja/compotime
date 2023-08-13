@@ -33,8 +33,6 @@ INITIAL_BETA = 0.01
 
 ALPHA_BOUNDS = (0.0, 2.0)
 
-CONDITION_NUMBER = 50
-
 
 class Params(ABC):
     """Parameters abstract class."""
