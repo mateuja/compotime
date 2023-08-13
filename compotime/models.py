@@ -548,7 +548,7 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
         flat_params,
         (shapes, y),
         constraints=initial_params.constraints,
-        options={"maxiter": 200},
+        options={"maxiter": 500},
     )
 
     if not opt_res.success:
@@ -579,16 +579,20 @@ def _initialize_X_zero(y: np.ndarray, no_trend: bool) -> np.ndarray:  # noqa: FB
     np.ndarray
         Initialized seed state matrix.
     """
-    regressions = []
+    intercepts = []
+    slopes = []
+
     for col in y.T:
-        no_nan_col = col[~np.isnan(col)][:10]
-        regressions.append(stats.linregress(range(len(no_nan_col)), no_nan_col))
-
-    intercepts = np.array([reg.intercept for reg in regressions])
+        if np.isnan(col[0]):
+            intercepts.append(0.0)
+            slopes.append(0.0)
+        else:
+            reg = stats.linregress(range(len(col[:10])), col[:10])
+            intercepts.append(reg.intercept)
+            slopes.append(reg.slope)
+    
     if no_trend:
-        return intercepts.reshape(1, -1)
-
-    slopes = np.array([reg.slope for reg in regressions])
+        return np.array(intercepts).reshape(1, -1)
     return np.vstack([intercepts, slopes])
 
 
