@@ -40,8 +40,8 @@ def test_local_level_forecaster_should_predict_constant_values(time_series: pd.D
 @settings(max_examples=10, deadline=datetime.timedelta(seconds=30))
 @given(data=st.data())
 def test_models_should_work_with_different_types_of_indexes(
-    model: Union[type[LocalLevelForecaster], type[LocalTrendForecaster]],
-    index_type: Union[type[pd.RangeIndex], type[pd.DatetimeIndex], type[pd.PeriodIndex]],
+    model: type[Union[LocalLevelForecaster, LocalTrendForecaster]],
+    index_type: type[Union[pd.RangeIndex, pd.DatetimeIndex, pd.PeriodIndex]],
     shape: tuple[int, int],
     data: DataObject,
 ):
@@ -75,7 +75,7 @@ def test_inv_log_ratio_is_inverse_of_log_ratio(array: np.ndarray):
 
 @pytest.mark.parametrize("model", [(LocalLevelForecaster), (LocalTrendForecaster)])
 def test_forecasts_should_be_invariant_to_choice_of_base_ts(
-    model: Union[type[LocalLevelForecaster], type[LocalTrendForecaster]],
+    model: type[Union[LocalLevelForecaster, LocalTrendForecaster]],
 ):
     """Test that the forecasts of the models are invariant to the choice of the base time series."""
     time_series = pd.DataFrame(
@@ -98,7 +98,7 @@ def test_forecasts_should_be_invariant_to_choice_of_base_ts(
 @pytest.mark.parametrize("model", [(LocalLevelForecaster), (LocalTrendForecaster)])
 @given(time_series=compositional_ts())
 def test_log_ratio_raises_error_when_all_columns_have_nan(
-    model: Union[type[LocalLevelForecaster], type[LocalTrendForecaster]],
+    model: type[Union[LocalLevelForecaster, LocalTrendForecaster]],
     time_series: pd.DataFrame,
 ):
     """Test that a ``LogRatioTransformError`` is raised when all time series have nans."""
@@ -113,7 +113,7 @@ def test_log_ratio_raises_error_when_all_columns_have_nan(
 
 
 @pytest.mark.parametrize("model", [(LocalLevelForecaster), (LocalTrendForecaster)])
-def test_freq_inference_error(model: Union[type[LocalLevelForecaster], type[LocalTrendForecaster]]):
+def test_freq_inference_error(model: type[Union[LocalLevelForecaster, LocalTrendForecaster]]):
     """Test that a ``FreqInferenceError`` is raised when the index frequency cannot be inferred."""
     index = pd.DatetimeIndex([pd.to_datetime("2020-01-01"), pd.to_datetime("2020-01-02")])
     time_series = pd.DataFrame({"t1": [0.5, 0.3], "t2": [0.5, 0.7]}, index)
@@ -126,7 +126,7 @@ def test_freq_inference_error(model: Union[type[LocalLevelForecaster], type[Loca
 @pytest.mark.parametrize("model", [(LocalLevelForecaster), (LocalTrendForecaster)])
 @given(time_series=compositional_ts(shape=(10, 3)))
 def test_invalid_index_error(
-    model: Union[type[LocalLevelForecaster], type[LocalTrendForecaster]],
+    model: type[Union[LocalLevelForecaster, LocalTrendForecaster]],
     time_series: pd.DataFrame,
 ):
     """Test that an ``InvalidIndexError`` is raised when the index values are not equally spaced."""
