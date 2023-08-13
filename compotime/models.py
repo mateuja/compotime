@@ -33,8 +33,6 @@ INITIAL_BETA = 0.01
 
 ALPHA_BOUNDS = (0.0, 2.0)
 
-CONDITION_NUMBER = 50
-
 
 class Params(ABC):
     """Parameters abstract class."""
@@ -548,7 +546,7 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
         flat_params,
         (shapes, y),
         constraints=initial_params.constraints,
-        options={"maxiter": 200},
+        options={"maxiter": 500},
     )
 
     if not opt_res.success:
@@ -579,16 +577,20 @@ def _initialize_X_zero(y: np.ndarray, no_trend: bool) -> np.ndarray:  # noqa: FB
     np.ndarray
         Initialized seed state matrix.
     """
-    regressions = []
+    intercepts = []
+    slopes = []
+
     for col in y.T:
-        no_nan_col = col[~np.isnan(col)][:10]
-        regressions.append(stats.linregress(range(len(no_nan_col)), no_nan_col))
+        if np.isnan(col[0]):
+            intercepts.append(0.0)
+            slopes.append(0.0)
+        else:
+            reg = stats.linregress(range(len(col[:10])), col[:10])
+            intercepts.append(reg.intercept)
+            slopes.append(reg.slope)
 
-    intercepts = np.array([reg.intercept for reg in regressions])
     if no_trend:
-        return intercepts.reshape(1, -1)
-
-    slopes = np.array([reg.slope for reg in regressions])
+        return np.array(intercepts).reshape(1, -1)
     return np.vstack([intercepts, slopes])
 
 
@@ -665,9 +667,7 @@ def _neg_log_likelihood(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> flo
 
     if np.isnan(y).any():
         return _adj_neg_log_likelihood(y, errors)
-    return np.linalg.slogdet(
-        _regularize(np.matmul(errors.T, errors) / n),
-    )[1]
+    return np.linalg.slogdet((errors.T @ errors) / n)[1]
 
 
 def _adj_neg_log_likelihood(y: np.ndarray, errors: np.ndarray) -> float:
@@ -694,32 +694,10 @@ def _adj_neg_log_likelihood(y: np.ndarray, errors: np.ndarray) -> float:
     adj_gen_var = 0
     for y_t in y:
         selection = _compute_selection_matrix(y_t)
-        adjusted_covar = _regularize(selection @ covar @ selection.T)
-        _, gen_var_log_t = np.linalg.slogdet(adjusted_covar)
+        _, gen_var_log_t = np.linalg.slogdet(selection @ covar @ selection.T)
         adj_gen_var += gen_var_log_t
 
     return adj_gen_var
-
-
-def _regularize(covar: np.ndarray) -> np.ndarray:
-    """Regularize the covariance matrix.
-
-    Add a delta parameter to the diagonal of the covariance matrix to ensure that it is
-    non-singular and well conditioned.
-
-    Parameters
-    ----------
-    covar
-        Covariance matrix.
-
-    Returns
-    -------
-    np.ndarray
-        Regularized covariance matrix.
-    """
-    eigenvals = np.linalg.eigvals(covar)
-    delta = max(0, (max(eigenvals) - CONDITION_NUMBER * min(eigenvals)) / (CONDITION_NUMBER - 1))
-    return covar + np.diag(np.repeat(delta, len(covar)))
 
 
 def _compute_selection_matrix(y_t: np.ndarray) -> np.ndarray:
