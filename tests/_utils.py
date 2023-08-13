@@ -37,11 +37,7 @@ def compositional_ts_array(
 @st.composite
 def compositional_ts(
     draw: DrawFn,
-    index_type: Union[
-        type[pd.RangeIndex],
-        type[pd.PeriodIndex],
-        type[pd.DatetimeIndex],
-    ] = pd.DatetimeIndex,
+    index_type: type[Union[pd.RangeIndex, pd.PeriodIndex, pd.DatetimeIndex]] = pd.DatetimeIndex,
     shape: Optional[tuple[int, int]] = None,
 ) -> pd.DataFrame:
     """Strategy to generate a dataframe of compositional time series."""
