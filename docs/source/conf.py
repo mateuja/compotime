@@ -28,9 +28,12 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.todo",
     "nbsphinx",
+    "sphinx_gallery.load_style",
 ]
 
 autosummary_generate = True
+
+nbsphinx_execute = "auto"
 
 # Napoleon settings
 napoleon_google_docstring = False

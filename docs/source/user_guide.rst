@@ -11,7 +11,7 @@ The user guide consists of an example notebook, which shows the main functionali
 .. nbgallery::
    :glob:
 
-   examples/*
+   _examples/*
 
 
 
