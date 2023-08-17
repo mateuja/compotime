@@ -9,9 +9,6 @@ References
 .. [*] Snyder, R.D. et al. 2017
     Forecasting compositional time series: A state space approach
     International Journal of Forecasting.
-
-.. [*] Olive, D. 2023
-    Prediction and Statistical Learning.
 """
 import abc
 import logging
