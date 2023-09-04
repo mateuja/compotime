@@ -230,6 +230,7 @@ class LocalLevelForecaster:
     """
 
     optim_params_: LocalLevelParams
+    opt_success_: bool
     X_: list[np.ndarray]
     fitted_curve_: pd.DataFrame
     colnames_: pd.Index
@@ -260,7 +261,7 @@ class LocalLevelForecaster:
 
         log_y, self.base_col_idx_ = _log_ratio(y.values)
 
-        self.optim_params_ = _fit_local_level(log_y)
+        self.optim_params_, self.opt_success_ = _fit_local_level(log_y)
         self.X_, fitted_curve, _ = _forward(
             self.optim_params_.X_zero,
             self.optim_params_.g,
@@ -331,6 +332,7 @@ class LocalTrendForecaster:
     """  # noqa: E501
 
     optim_params_: LocalTrendParams
+    opt_success_: bool
     X_: list[np.ndarray]
     fitted_curve_: pd.DataFrame
     colnames_: pd.Index
@@ -361,7 +363,7 @@ class LocalTrendForecaster:
 
         log_y, self.base_col_idx_ = _log_ratio(y.values)
 
-        self.optim_params_ = _fit_local_trend(log_y)
+        self.optim_params_, self.opt_success_ = _fit_local_trend(log_y)
 
         self.X_, fitted_curve, _ = _forward(self.optim_params_.X_zero, self.optim_params_.g, log_y)
 
@@ -491,7 +493,7 @@ def _unflatten_params(
     return params
 
 
-def _fit_local_level(y: np.ndarray) -> LocalLevelParams:
+def _fit_local_level(y: np.ndarray) -> tuple[LocalLevelParams, bool]:
     """Find the optimal parameters of a local level model for the given data.
 
     Parameters
@@ -519,10 +521,10 @@ def _fit_local_level(y: np.ndarray) -> LocalLevelParams:
 
     opt_params = _unflatten_params(opt_res.x, shapes)
 
-    return LocalLevelParams(*opt_params)
+    return LocalLevelParams(*opt_params), opt_res.success
 
 
-def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
+def _fit_local_trend(y: np.ndarray) -> tuple[LocalTrendParams, bool]:
     """Find the optimal parameters of a local trend model for the given data.
 
     Parameters
@@ -551,7 +553,7 @@ def _fit_local_trend(y: np.ndarray) -> LocalTrendParams:
 
     opt_params = _unflatten_params(opt_res.x, shapes)
 
-    return LocalTrendParams(*opt_params)
+    return LocalTrendParams(*opt_params), opt_res.success
 
 
 def _initialize_X_zero(y: np.ndarray, no_trend: bool) -> np.ndarray:  # noqa: FBT001, N802
