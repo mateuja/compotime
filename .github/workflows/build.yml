@@ -51,4 +51,4 @@ jobs:
 
       - name: Check compatibility with other libraries
         run: |
-          poetry add statsmodels scikit-learn sktime
+          poetry add statsmodels scikit-learn
