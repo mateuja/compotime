@@ -10,6 +10,7 @@ requires-python = ">=3.9,<3.12"
 readme = "README.md"
 maintainers = [{ name = "Jaume Mateu" }]
 dependencies = [
+    "numba>=0.60.0",
     "numpy>=1.25.1,<2",
     "pandas>=2.0.2,<3",
     "scipy>=1.10.1,<2",

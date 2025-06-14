@@ -23,6 +23,22 @@ from scipy import linalg, optimize, stats
 from scipy.optimize import Bounds, LinearConstraint
 from typing_extensions import Self
 
+try:
+    from numba import jit
+    NUMBA_AVAILABLE = True
+    logging.info("Numba JIT compilation enabled for performance optimization")
+except ImportError:
+    NUMBA_AVAILABLE = False
+    logging.warning(
+        "Numba is not available. Performance optimizations will be disabled. "
+        "Install numba for better performance: pip install numba"
+    )
+    # Create a no-op decorator if numba is not available
+    def jit(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
 from .errors import FreqInferenceError, InvalidIndexError, LogRatioTransformError
 
 INITIAL_ALPHA = 0.1
@@ -596,6 +612,23 @@ def _initialize_X_zero(y: np.ndarray, no_trend: bool) -> np.ndarray:  # noqa: FB
     return np.vstack([intercepts, slopes])
 
 
+@jit(nopython=True, cache=True)
+def _predict_local_trend_jit(horizon: int, X_last: np.ndarray) -> np.ndarray:
+    """JIT-compiled prediction for local trend model."""
+    F = np.array([[1., 1.], [0., 1.]])  # Upper triangular matrix
+    w = np.ones(2)
+    
+    preds = np.zeros((horizon, X_last.shape[1]))
+    X_current = X_last.copy()
+    
+    for i in range(horizon):
+        y_hat = np.dot(w, X_current)
+        X_current = np.dot(F, X_current)
+        preds[i] = y_hat
+    
+    return preds
+
+
 def _predict_local_trend(horizon: int, X_last: np.ndarray) -> np.ndarray:
     """Predict future values for a time series using the local trend model.
 
@@ -612,6 +645,10 @@ def _predict_local_trend(horizon: int, X_last: np.ndarray) -> np.ndarray:
     np.ndarray
         Future values for the time series.
     """
+    if NUMBA_AVAILABLE:
+        return _predict_local_trend_jit(horizon, X_last)
+    
+    # Fallback implementation
     F = np.tri(2).T
     w = np.ones(2)
 
@@ -715,7 +752,10 @@ def _compute_selection_matrix(y_t: np.ndarray) -> np.ndarray:
     np.ndarray
         Selection matrix.
     """
-    # Vectorized implementation using boolean indexing
+    if NUMBA_AVAILABLE:
+        return _compute_selection_matrix_jit(y_t)
+    
+    # Fallback to vectorized implementation using boolean indexing
     valid_mask = ~np.isnan(y_t)
     n_valid = np.sum(valid_mask)
 
@@ -724,6 +764,63 @@ def _compute_selection_matrix(y_t: np.ndarray) -> np.ndarray:
 
     # Create identity matrix and select rows for valid observations
     return np.eye(len(y_t))[valid_mask]
+
+
+@jit(nopython=True, cache=True)
+def _forward_jit_core(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray, 
+                      w: np.ndarray, F: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """JIT-compiled core computation of _forward function.
+    
+    This function contains the main computational loop and is optimized
+    with Numba for maximum performance.
+    """
+    n_timesteps, n_series = y.shape
+    
+    # Pre-allocate arrays
+    fitted_curve = np.zeros((n_timesteps, n_series))
+    errors = np.zeros((n_timesteps, n_series))
+    
+    X_prev = X_zero.copy()
+    
+    for i in range(n_timesteps):
+        y_t = y[i]
+        fitted = np.dot(w, X_prev)
+        error = y_t - fitted
+        
+        # Handle NaN values
+        for j in range(len(error)):
+            if np.isnan(error[j]):
+                error[j] = 0.0
+        
+        X_prev = np.dot(F, X_prev) + np.dot(g, error.reshape(1, -1))
+        
+        errors[i] = error
+        fitted_curve[i] = fitted
+    
+    return fitted_curve, errors
+
+
+@jit(nopython=True, cache=True)
+def _compute_selection_matrix_jit(y_t: np.ndarray) -> np.ndarray:
+    """JIT-compiled selection matrix computation."""
+    n_series = len(y_t)
+    valid_indices = []
+    
+    # Find valid (non-NaN) indices
+    for i in range(n_series):
+        if not np.isnan(y_t[i]):
+            valid_indices.append(i)
+    
+    n_valid = len(valid_indices)
+    if n_valid == 0:
+        return np.zeros((0, n_series))
+    
+    # Create selection matrix
+    selection = np.zeros((n_valid, n_series))
+    for i, j in enumerate(valid_indices):
+        selection[i, j] = 1.0
+    
+    return selection
 
 
 def _get_cached_matrices(n_rows: int) -> tuple[np.ndarray, np.ndarray]:
@@ -772,7 +869,22 @@ def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
     # Use cached matrices for better performance
     w, F = _get_cached_matrices(n_rows)
 
-    # Pre-allocate arrays for better performance
+    if NUMBA_AVAILABLE:
+        # Use JIT-compiled version for maximum performance
+        fitted_curve, errors = _forward_jit_core(X_zero, g, y, w, F)
+        
+        # Build latent states list (can't be JIT compiled due to variable shapes)
+        latent_states = [X_zero]
+        X_prev = X_zero.copy()
+        
+        for i in range(n_timesteps):
+            error = errors[i]
+            X_prev = F @ X_prev + g @ error.reshape(1, -1)
+            latent_states.append(X_prev.copy())
+            
+        return latent_states, fitted_curve, errors
+    
+    # Fallback to optimized non-JIT version
     latent_states = [X_zero]  # Keep as list since we need variable shapes
     fitted_curve = np.zeros((n_timesteps, n_series))
     errors = np.zeros((n_timesteps, n_series))
