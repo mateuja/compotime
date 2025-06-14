@@ -30,6 +30,9 @@ INITIAL_BETA = 0.01
 
 ALPHA_BOUNDS = (0.0, 2.0)
 
+# Cache for frequently used matrices
+_MATRIX_CACHE = {}
+
 
 class Params(ABC):
     """Parameters abstract class."""
@@ -712,15 +715,36 @@ def _compute_selection_matrix(y_t: np.ndarray) -> np.ndarray:
     np.ndarray
         Selection matrix.
     """
-    selection = np.zeros((np.count_nonzero(~np.isnan(y_t)), len(y_t)))
+    # Vectorized implementation using boolean indexing
+    valid_mask = ~np.isnan(y_t)
+    n_valid = np.sum(valid_mask)
 
-    i = 0
-    for j in range(len(y_t)):
-        if not np.isnan(y_t[j]):
-            selection[i, j] = 1
-            i += 1
+    if n_valid == 0:
+        return np.zeros((0, len(y_t)))
 
-    return selection
+    # Create identity matrix and select rows for valid observations
+    return np.eye(len(y_t))[valid_mask]
+
+
+def _get_cached_matrices(n_rows: int) -> tuple[np.ndarray, np.ndarray]:
+    """Get cached w and F matrices for given dimensions.
+
+    Parameters
+    ----------
+    n_rows : int
+        Number of rows for the matrices.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        w vector and F matrix.
+    """
+    if n_rows not in _MATRIX_CACHE:
+        w = np.ones(n_rows)
+        F = np.tri(n_rows).T
+        _MATRIX_CACHE[n_rows] = (w, F)
+
+    return _MATRIX_CACHE[n_rows]
 
 
 def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
@@ -742,27 +766,35 @@ def _forward(X_zero: np.ndarray, g: np.ndarray, y: np.ndarray) -> tuple:
     tuple
         Latent states, fitted curve and errors for the different time steps.
     """
+    n_timesteps, n_series = y.shape
     n_rows = 1 if X_zero.ndim == 1 else len(X_zero)
 
-    w = np.ones(n_rows)
-    F = np.tri(n_rows).T
+    # Use cached matrices for better performance
+    w, F = _get_cached_matrices(n_rows)
 
-    latent_states = []
-    fitted_curve = []
-    errors = []
-    X_prev = X_zero
-    latent_states.append(X_zero)
-    for y_t in y:
+    # Pre-allocate arrays for better performance
+    latent_states = [X_zero]  # Keep as list since we need variable shapes
+    fitted_curve = np.zeros((n_timesteps, n_series))
+    errors = np.zeros((n_timesteps, n_series))
+
+    X_prev = X_zero.copy()
+
+    for i, y_t in enumerate(y):
         fitted = w @ X_prev
         error = y_t - fitted
-        error[np.isnan(error)] = 0.0
+
+        # Vectorized NaN handling
+        nan_mask = np.isnan(error)
+        error[nan_mask] = 0.0
+
         X_prev = F @ X_prev + g @ error.reshape(1, -1)
 
-        errors.append(error)
-        latent_states.append(X_prev)
-        fitted_curve.append(fitted)
+        # Direct assignment instead of append
+        errors[i] = error
+        fitted_curve[i] = fitted
+        latent_states.append(X_prev.copy())
 
-    return latent_states, np.vstack(fitted_curve), np.vstack(errors)
+    return latent_states, fitted_curve, errors
 
 
 def _validate_idx(idx: pd.Index) -> None:
