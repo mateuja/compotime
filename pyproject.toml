@@ -1,38 +1,55 @@
-[tool.poetry]
+[project]
 name = "compotime"
 version = "0.3.0"
 description = "A library for forecasting compositional time series"
-authors = ["Jaume Mateu", "Eduard Serrahima"]
-maintainers = ["Jaume Mateu"]
+authors = [
+    { name = "Jaume Mateu" },
+    { name = "Eduard Serrahima" },
+]
+requires-python = ">=3.9,<3.12"
 readme = "README.md"
-documentation = "https://mateuja.github.io/compotime/"
+maintainers = [{ name = "Jaume Mateu" }]
+dependencies = [
+    "numpy>=1.25.1,<2",
+    "pandas>=2.0.2,<3",
+    "scipy>=1.10.1,<2",
+    "typing-extensions>=4.6.3,<5",
+]
 
-[tool.poetry.dependencies]
-numpy = "^1.25.1"
-pandas = "^2.0.2"
-python = ">=3.9,<3.12"
-scipy = "^1.10.1"
-typing-extensions = "^4.6.3"
+[project.urls]
+Documentation = "https://mateuja.github.io/compotime/"
 
-[tool.poetry.group.dev.dependencies]
-black = {extras = ["jupyter"], version = "^23.7.0"}
-docformatter = "^1.7.5"
-hypothesis = "^6.82.0"
-ipython = "^8.14.0"
-isort = "^5.12.0"
-jupyterlab = "^4.0.3"
-matplotlib = "^3.7.1"
-pre-commit = "^3.3.2"
-pytest = "^7.4.0"
-pytest-cov = "^4.1.0"
-pytest-xdist = "^3.3.1"
-ruff = ">=0.0.278,<0.0.291"
+[dependency-groups]
+dev = [
+    "black[jupyter]>=23.7.0,<24",
+    "docformatter>=1.7.5,<2",
+    "hypothesis>=6.82.0,<7",
+    "ipython>=8.14.0,<9",
+    "isort>=5.12.0,<6",
+    "jupyterlab>=4.0.3,<5",
+    "matplotlib>=3.7.1,<4",
+    "pre-commit>=3.3.2,<4",
+    "pytest>=7.4.0,<8",
+    "pytest-cov>=4.1.0,<5",
+    "pytest-xdist>=3.3.1,<4",
+    "ruff>=0.0.278,<0.0.291",
+]
+docs = [
+    "nbsphinx>=0.9.2,<0.10",
+    "pydata-sphinx-theme>=0.13.3,<0.14",
+    "sphinx>=7.0.1,<8",
+    "sphinx-gallery>=0.13,<0.15",
+]
 
-[tool.poetry.group.docs.dependencies]
-nbsphinx = "^0.9.2"
-pydata-sphinx-theme = "^0.13.3"
-sphinx = "^7.0.1"
-sphinx-gallery = ">=0.13,<0.15"
+[tool.uv]
+default-groups = [
+    "dev",
+    "docs",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 100
@@ -64,9 +81,5 @@ docstring-quotes = "double"
 [tool.black]
 line-length = 100
 target-version = ["py39"]
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
 
 

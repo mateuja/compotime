@@ -21,24 +21,23 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: true
       - name: Install dependencies
         run: |
           sudo apt install pandoc
-          python -m pip install --upgrade pip
-          pip install poetry
-          if [ -f pyproject.toml ]; then poetry install --with dev,docs; fi
+          uv sync --locked --all-extras
 
       - name: Lint with ruff
         run: |
-          poetry run ruff compotime tests
+          uv run ruff compotime tests
 
       - name: Test with pytest
         run: |
-          poetry run make tests
+          uv run make tests
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
@@ -47,8 +46,8 @@ jobs:
 
       - name: Build documentation
         run: |
-          poetry run make docs
+          uv run make docs
 
       - name: Check compatibility with other libraries
         run: |
-          poetry add statsmodels scikit-learn
+          uv add statsmodels scikit-learn
